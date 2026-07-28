@@ -50,9 +50,10 @@ The `||` keeps real env vars winning when they do get through. Injected copies (
 
 Caveats:
 
-- **Re-inject after every bundle update.** Copying a fresh `dist/acculynx.cjs` into `~/claude-local` wipes the first two; a plugin update on claude.ai re-mirrors and wipes the third.
-- **Never do this to a bundle that lands in a git repo** — the committed `dist/acculynx.cjs` here and the public `creding-plugins` copy must stay key-free.
-- The durable fix for Cowork would be uploading the credentialed plugin privately to claude.ai ("My Uploads") instead of relying on the public marketplace copy.
+- **Release with `scripts/sync-plugin.sh`** — it builds, copies the bundle into `~/claude-local`, and re-injects the credentials automatically (reading them from the bundle-adjacent `config.json`). Then bump the plugin version in both `~/claude-local/.claude-plugin/marketplace.json` and `acculynx-plugin/.claude-plugin/plugin.json` — `claude plugin update` refuses to re-copy an unchanged version number — and run `claude plugin marketplace update creding-local && claude plugin update acculynx@creding-local`.
+- The Cowork sandbox mirror copies are outside this pipeline: a plugin re-sync on claude.ai re-mirrors a key-free bundle and needs manual re-injection.
+- **Never inject into a bundle that lands in a git repo** — the committed `dist/acculynx.cjs` here must stay key-free. (The public `creding-plugins` marketplace no longer hosts this plugin at all, for exactly this reason.)
+- The durable fix for Cowork would be uploading the credentialed plugin privately to claude.ai ("My Uploads") instead of relying on any public marketplace copy.
 
 ## Discovery workflow
 
@@ -128,7 +129,7 @@ fs.writeFileSync('src/lib/logo-assets.ts',
 "
 ```
 
-Release to the Claude plugin: `bash scripts/sync-plugin.sh` copies the built bundle into `claude-plugins/plugins/acculynx/cli/`; commit that repo to publish.
+Release to the Claude plugin: `bash scripts/sync-plugin.sh` builds and copies the bundle into the private local marketplace (`~/claude-local/acculynx-plugin/cli/`) with credentials injected — see the Auth section for the version-bump + `claude plugin update` steps.
 
 ## Provenance
 
