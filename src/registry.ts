@@ -114,6 +114,8 @@ import getAccuLynxStates from "./commands/acculynx_get_accu_lynx_states.ts";
 import getAccuLynxState from "./commands/acculynx_get_accu_lynx_state.ts";
 import getUnitsOfMeasure from "./commands/acculynx_get_units_of_measure.ts";
 import getReportsByInstanceInstanceRunsByScheduleId from "./commands/acculynx_get_reports_by_instance_instance_runs_by_schedule_id.ts";
+import generateCocPdf from "./commands/acculynx_generate_coc_pdf.ts";
+import generateRoofReportPdf from "./commands/acculynx_generate_roof_report_pdf.ts";
 import getReportLatestInstance from "./commands/acculynx_get_report_latest_instance.ts";
 import getReportByInstanceId from "./commands/acculynx_get_report_by_instance_id.ts";
 import getReportsRecipientsByInstanceId from "./commands/acculynx_get_reports_recipients_by_instance_id.ts";
@@ -251,6 +253,10 @@ export const REGISTRY: CommandEntry[] = [
   { group: "settings", verb: "al-states", tool: "acculynx_get_accu_lynx_states", config: getAccuLynxStates, positional: "countryId" },
   { group: "settings", verb: "al-state", tool: "acculynx_get_accu_lynx_state", config: getAccuLynxState },
   { group: "settings", verb: "units-of-measure", tool: "acculynx_get_units_of_measure", config: getUnitsOfMeasure },
+  { group: "reports", verb: "coc", tool: "acculynx_generate_coc_pdf", config: generateCocPdf,
+    hints: ["Show the PDF to the user for review; after confirmation upload with: acculynx documents add (see: acculynx describe documents add) into the 'Certificate of Completion' folder (fallback 'Other'; folder UUIDs: acculynx documents folders)"] },
+  { group: "reports", verb: "roof-report", tool: "acculynx_generate_roof_report_pdf", config: generateRoofReportPdf,
+    hints: ["Show the PDF to the user for review; after confirmation upload with: acculynx documents add (see: acculynx describe documents add) into the 'Roof Report' folder (fallback 'Other'; folder UUIDs: acculynx documents folders)"] },
   { group: "reports", verb: "runs", tool: "acculynx_get_reports_by_instance_instance_runs_by_schedule_id", config: getReportsByInstanceInstanceRunsByScheduleId, positional: "scheduledReportId" },
   { group: "reports", verb: "latest-run", tool: "acculynx_get_report_latest_instance", config: getReportLatestInstance, positional: "scheduledReportId" },
   { group: "reports", verb: "run", tool: "acculynx_get_report_by_instance_id", config: getReportByInstanceId },
