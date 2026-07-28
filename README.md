@@ -49,7 +49,7 @@ Errors are structured JSON on stderr with a `suggestion` field. Exit codes: 0 ok
 acculynx jobs list --sort-by CreatedDate --sort-order Descending --page-size 5
 
 # Mutation: record a customer payment on a job
-acculynx payments add-received <jobId> --json '{"amount": 2500, "paymentType": "Check"}'
+acculynx payments add-received <jobId> --amount 2500 --payment-date 2026-07-28 --check-number 1042
 
 # Report: render a Certificate of Completion, then upload after review
 acculynx reports coc --job-id <jobId> --customer-name "Jane Doe" \
@@ -57,7 +57,8 @@ acculynx reports coc --job-id <jobId> --customer-name "Jane Doe" \
   --scope-original-amount 18500 --completion-date 2026-07-01 \
   --json '{"supplements": []}' -o coc.pdf
 acculynx documents folders          # find the "Certificate of Completion" folder UUID
-acculynx documents add --json '{"jobId": "...", "documentFolderId": "...", "file": "coc.pdf"}'
+acculynx documents add --job-id <jobId> --document-folder-id <folderId> --file coc.pdf \
+  --description "Certificate of Completion - Approved"
 ```
 
 ## Development
@@ -69,7 +70,30 @@ npm run smoke        # live read-only checks; skips without ACCULYNX_API_KEY
 npm run build        # esbuild bundle
 ```
 
-Regenerate the SDK with `npx api install "@acculynxapi/v2.2614.0#2yp7tr813mrlab3aq"`; after an SDK bump, re-run the method-name drift check in `scripts/` notes (every `client.<method>` in `src/commands/` must exist in `.api/apis/acculynxapi/src/sdk.ts`). Commands were generated into `src/registry.ts` by `scripts/gen-registry.ts`; projections/hints are edited in place. Letterhead logos live in `assets/` and are embedded via `src/lib/logo-assets.ts` (regenerate the module if you swap the PNGs).
+Regenerate the SDK with `npx api install "@acculynxapi/v2.2614.0#2yp7tr813mrlab3aq"`. After an SDK bump, re-run the method-name drift check — every `client.<method>` used in `src/commands/` must exist in `.api/apis/acculynxapi/src/sdk.ts`:
+
+```bash
+for m in $(grep -oh "client\.\w*" src/commands/*.ts | sed 's/client\.//' | sort -u); do
+  grep -q "  $m(" .api/apis/acculynxapi/src/sdk.ts || echo "MISSING: $m"
+done
+```
+
+Commands were generated into `src/registry.ts` by `scripts/gen-registry.ts`; projections/hints are edited in place there. Letterhead logos live in `assets/` and are embedded via `src/lib/logo-assets.ts`; if you swap a PNG, regenerate that module:
+
+```bash
+node -e "
+const fs = require('fs');
+const coc = fs.readFileSync('assets/draft-coc/logo.png').toString('base64');
+const roof = fs.readFileSync('assets/generate-roof-report/logo.png').toString('base64');
+fs.writeFileSync('src/lib/logo-assets.ts',
+  '// GENERATED from assets/*/logo.png — regenerate with the command in README (Development).\n' +
+  'function b64(s: string): Uint8Array { return Uint8Array.from(Buffer.from(s, \"base64\")); }\n' +
+  'export const LOGO_DRAFT_COC = b64(\n  \"' + coc + '\",\n);\n' +
+  'export const LOGO_ROOF_REPORT = b64(\n  \"' + roof + '\",\n);\n');
+"
+```
+
+Release to the Claude plugin: `bash scripts/sync-plugin.sh` copies the built bundle into `claude-plugins/plugins/acculynx/cli/`; commit that repo to publish.
 
 ## Provenance
 
