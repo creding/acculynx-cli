@@ -29,3 +29,14 @@ test("every schema introspects; no scalar flag collides with a global flag", () 
     }
   }
 });
+
+test("core list commands have concise projections; jobs create has hints", () => {
+  for (const key of ["jobs list", "contacts list", "users list"]) {
+    const [g, v] = key.split(" ");
+    const e = REGISTRY.find((x) => x.group === g && x.verb === v)!;
+    assert.ok(e.project && e.project.length >= 3, `${key} missing projection`);
+    assert.ok(e.project.includes("id"));
+  }
+  const create = REGISTRY.find((x) => x.group === "jobs" && x.verb === "create")!;
+  assert.ok(create.hints && create.hints.length > 0);
+});
