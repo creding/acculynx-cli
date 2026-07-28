@@ -55,6 +55,18 @@ test("postprocess: projection produces items + _meta; --full disables; hints att
   assert.equal(full.items[0].junk, "x");
 });
 
+test("postprocess: --fields applies to bare top-level array payloads", () => {
+  const result = [
+    { id: 1, milestone: "Lead", junk: "x" },
+    { id: 2, milestone: "Prospect", junk: "y" },
+  ];
+  const projected = postprocess(entry, result, { ...opts, fields: ["milestone"] }) as any[];
+  assert.deepEqual(projected, [{ milestone: "Lead" }, { milestone: "Prospect" }]);
+  // no fields -> array passes through untouched (minus empties)
+  const passthrough = postprocess(entry, result, opts) as any[];
+  assert.equal(passthrough[0].junk, "x");
+});
+
 test("renderOutput truncates with guidance", () => {
   const out = renderOutput({ big: "y".repeat(200) }, { ...opts, limitChars: 50 });
   assert.ok(out.length < 260);

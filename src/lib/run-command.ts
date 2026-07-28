@@ -163,7 +163,10 @@ const PAGINATION_KEYS = ["totalCount", "totalRecordCount", "recordStartIndex", "
 export function postprocess(entry: CommandEntry, result: unknown, opts: GlobalOptions): unknown {
   let out = stripEmpty(result);
   const fields = opts.fields ?? (!opts.full ? entry.project : undefined);
-  if (fields && out && typeof out === "object" && !Array.isArray(out)) {
+  if (fields && Array.isArray(out)) {
+    // Bare top-level array payload (no pagination envelope): project each element.
+    out = out.map((item) => pick(item, fields));
+  } else if (fields && out && typeof out === "object" && !Array.isArray(out)) {
     const payload = out as Record<string, unknown>;
     if (Array.isArray(payload.items)) {
       const meta: Record<string, unknown> = { count: payload.items.length };
