@@ -15,12 +15,33 @@ function configPath(): string {
   return path.join(home, ".config", "acculynx", "config.json");
 }
 
-export function loadConfig(): CliConfig {
+/**
+ * Optional config.json sitting next to the running bundle. Lets a deployment
+ * ship credentials alongside the CLI file itself (e.g. a plugin's cli/ dir)
+ * without any home-directory or env setup. Never committed — the file is
+ * gitignored wherever the bundle lives in a repo.
+ */
+function bundleAdjacentConfigPath(): string | null {
   try {
-    return JSON.parse(fs.readFileSync(configPath(), "utf8")) as CliConfig;
+    const script = fs.realpathSync(process.argv[1] ?? "");
+    return path.join(path.dirname(script), "config.json");
+  } catch {
+    return null;
+  }
+}
+
+function readJsonConfig(file: string | null): CliConfig {
+  if (!file) return {};
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8")) as CliConfig;
   } catch {
     return {};
   }
+}
+
+/** Merged config: home file wins over bundle-adjacent file; env vars win over both (see applyConfig). */
+export function loadConfig(): CliConfig {
+  return { ...readJsonConfig(bundleAdjacentConfigPath()), ...readJsonConfig(configPath()) };
 }
 
 /** Env wins; config file fills gaps. Applied to process.env so lib/acculynx.ts works unchanged. */

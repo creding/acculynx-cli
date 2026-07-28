@@ -30,3 +30,29 @@ test("requireApiKey throws UsageError with setup hint when unset", async () => {
   assert.throws(() => requireApiKey(), UsageError);
   assert.throws(() => requireApiKey(), /ACCULYNX_API_KEY/);
 });
+
+test("loadConfig falls back to config.json next to the running script (home config wins)", async () => {
+  const fs = (await import("node:fs")).default;
+  const os = (await import("node:os")).default;
+  const path = (await import("node:path")).default;
+  const { loadConfig } = await import("../src/lib/config.ts");
+
+  const scriptDir = path.dirname(fs.realpathSync(process.argv[1]!));
+  const bundleCfgPath = path.join(scriptDir, "config.json");
+  fs.writeFileSync(bundleCfgPath, JSON.stringify({ apiKey: "bundle-key", timeoutMs: 1234 }));
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "alx-bundle-"));
+  process.env.ACCULYNX_CONFIG_HOME = tmpHome;
+  try {
+    // no home config: bundle-adjacent values apply
+    assert.equal(loadConfig().apiKey, "bundle-key");
+    // home config wins over bundle-adjacent
+    fs.mkdirSync(path.join(tmpHome, ".config", "acculynx"), { recursive: true });
+    fs.writeFileSync(path.join(tmpHome, ".config", "acculynx", "config.json"), JSON.stringify({ apiKey: "home-key" }));
+    const merged = loadConfig();
+    assert.equal(merged.apiKey, "home-key");
+    assert.equal(merged.timeoutMs, 1234); // non-conflicting bundle values survive
+  } finally {
+    fs.unlinkSync(bundleCfgPath);
+    delete process.env.ACCULYNX_CONFIG_HOME;
+  }
+});
