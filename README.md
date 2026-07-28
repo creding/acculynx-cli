@@ -33,19 +33,26 @@ Full resolution order: env vars > `~/.config/acculynx/config.json` > a `config.j
 
 ### Sandboxed environments (Cowork) — hardcoded-key escape hatch
 
-Cowork sandboxes forward none of the normal credential channels: user-settings env vars, `pluginConfigs`, and home-directory config files all fail to reach the CLI (anthropics/claude-code#39125), and in practice the bundle-adjacent `config.json` is not picked up there either — the sandbox invokes the bundle such that `process.argv[1]` does not resolve to the plugin's `cli/` directory, so the CLI never finds the adjacent file.
+Cowork sandboxes forward none of the normal credential channels: user-settings env vars, `pluginConfigs`, and home-directory config files all fail to reach the CLI (anthropics/claude-code#39125). Worse, Cowork does not run the locally installed plugin at all — it pulls the plugin from the marketplace registered **on claude.ai** (the public `creding/claude-plugins` copy) and mirrors it into the session sandbox (`~/Library/Application Support/Claude/local-agent-mode-sessions/<id>/<id>/rpm/plugin_*/`). The public copy gitignores `config.json`, so the mirrored bundle arrives with no credentials, and CLI-side marketplaces like `acculynx@creding-local` are never consulted. This is also why bundle-adjacent `config.json` appeared "broken" in Cowork: the file was simply never shipped.
 
-The working fallback is to inject the credentials directly into the private local-marketplace copy of the bundle (`~/claude-local/acculynx-plugin/cli/acculynx.cjs`, installed as `acculynx@creding-local` — a directory-source marketplace that is not on git). Two lines are inserted immediately after `"use strict";`:
+The working fallback is to inject the credentials directly into the bundle `acculynx.cjs` itself, so they travel wherever the file is copied. Two lines are inserted immediately after `"use strict";`:
 
 ```js
 process.env.ACCULYNX_API_KEY = process.env.ACCULYNX_API_KEY || "<key>";
 process.env.ACCULYNX_SIGNER_EMAIL = process.env.ACCULYNX_SIGNER_EMAIL || "<email>";
 ```
 
-The `||` keeps real env vars winning when they do get through. Caveats:
+The `||` keeps real env vars winning when they do get through. Injected copies (all local-only, never in git):
 
-- **Re-inject after every bundle update.** Copying a fresh `dist/acculynx.cjs` into `~/claude-local` (and the installed cache under `~/.claude/plugins/cache/creding-local/acculynx/<version>/cli/`) wipes the injection.
-- **Never do this to a bundle that lands in a git repo** — the committed `dist/acculynx.cjs` here and the public `creding-plugins` copy must stay key-free. This is strictly for the private local marketplace.
+- `~/claude-local/acculynx-plugin/cli/acculynx.cjs` — private directory-source marketplace (`acculynx@creding-local`), used by CLI/terminal sessions.
+- `~/.claude/plugins/cache/creding-local/acculynx/<version>/cli/acculynx.cjs` — the installed copy of the above.
+- `~/Library/Application Support/Claude/local-agent-mode-sessions/*/*/rpm/plugin_*/cli/acculynx.cjs` — the Cowork sandbox mirrors of the claude.ai plugin.
+
+Caveats:
+
+- **Re-inject after every bundle update.** Copying a fresh `dist/acculynx.cjs` into `~/claude-local` wipes the first two; a plugin update on claude.ai re-mirrors and wipes the third.
+- **Never do this to a bundle that lands in a git repo** — the committed `dist/acculynx.cjs` here and the public `creding-plugins` copy must stay key-free.
+- The durable fix for Cowork would be uploading the credentialed plugin privately to claude.ai ("My Uploads") instead of relying on the public marketplace copy.
 
 ## Discovery workflow
 
