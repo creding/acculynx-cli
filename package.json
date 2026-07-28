@@ -1,0 +1,30 @@
+{
+  "name": "acculynx-cli",
+  "version": "0.1.0",
+  "description": "LLM-first CLI for the full AccuLynx v2 API",
+  "type": "module",
+  "bin": {
+    "acculynx": "./dist/acculynx.cjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=cjs --loader:.png=binary --banner:js='#!/usr/bin/env node' --outfile=dist/acculynx.cjs && chmod +x dist/acculynx.cjs",
+    "dev": "tsx src/index.ts",
+    "test": "node --import tsx --test test/*.test.ts",
+    "smoke": "tsx test/smoke.ts"
+  },
+  "dependencies": {
+    "@api/acculynxapi": "file:.api/apis/acculynxapi",
+    "pdf-lib": "^1.17.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.24.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

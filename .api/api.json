@@ -1,0 +1,14 @@
+{
+  "$schema": "https://unpkg.com/api@7/schema.json",
+  "apis": [
+    {
+      "private": true,
+      "identifier": "acculynxapi",
+      "source": "@acculynxapi/v2.2614.0#2yp7tr813mrlab3aq",
+      "integrity": "sha512-XYCNT0mqXROzDh6eRWEBBm1chAD1ojYbmr6R9t7PEsLPVL0IyMCVJeriIPMXofmiS6/Oj0qOPbznr+gGr6OP2w==",
+      "installerVersion": "7.0.0",
+      "language": "js",
+      "createdAt": "2026-07-28T19:00:52.539Z"
+    }
+  ]
+}
