@@ -4,6 +4,16 @@ An LLM-first command-line interface covering the full AccuLynx v2 API — 120 co
 
 ## Install
 
+**Run without installing (npx):** the repo ships the committed self-contained bundle, so this works straight from GitHub:
+
+```bash
+ACCULYNX_API_KEY=... npx -y github:creding/acculynx-cli jobs list --page-size 5
+```
+
+Env vars pass through like any command (`ACCULYNX_API_KEY`, `ACCULYNX_SIGNER_EMAIL`, ...), and exported vars or `~/.config/acculynx/config.json` are picked up as usual. The first run clones and caches; later runs are instant. Caveat: if your `~/.npmrc` sets `min-release-age`, npm currently refuses git installs ("cannot be provided when using --before") — prefix with `npm_config_userconfig=/dev/null` for that one command, or drop the setting.
+
+**From a checkout:**
+
 ```bash
 npm install
 npm run build          # single-file bundle at dist/acculynx.cjs
