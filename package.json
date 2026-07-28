@@ -17,15 +17,16 @@
     "smoke": "tsx test/smoke.ts",
     "prepare": "npm run build"
   },
-  "dependencies": {
-    "@api/acculynxapi": "file:.api/apis/acculynxapi",
-    "pdf-lib": "^1.17.1",
-    "zod": "^4.4.3"
-  },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "esbuild": "^0.24.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
-  }
+    "typescript": "^5.7.2",
+    "@api/acculynxapi": "file:.api/apis/acculynxapi",
+    "pdf-lib": "^1.17.1",
+    "zod": "^4.4.3"
+  },
+  "files": [
+    "dist"
+  ]
 }
