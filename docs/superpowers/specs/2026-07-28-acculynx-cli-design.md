@@ -87,17 +87,32 @@ acculynx reports coc --job <jobId> -o coc.pdf
 - **Flags:** scalar zod fields (string/number/boolean/enum) auto-become `--kebab-case` flags. Nested objects/arrays come via `--json` (inline) or `--input <file>` (or `-` for stdin); flags and JSON merge, flags win.
 - **Validation:** zod parses the merged input; failures print the zod issues and exit 2.
 
+## LLM-first ergonomics
+
+The primary user is an LLM agent driving the CLI through a shell. Every design choice optimizes for: an agent that has never seen the CLI can discover what it needs in 1–2 cheap calls, act, and recover from mistakes without human help.
+
+1. **Never interactive.** No TTY prompts, no confirmations, no pagers. All input comes from flags/JSON/stdin; anything else is an immediate usage error. No ANSI colors or spinners when stdout is not a TTY (and plain output even when it is).
+2. **Errors teach the fix.** Every failure prints machine-readable JSON to stderr: `{"error": {"message", "status?", "suggestion"}}`. Validation failures include the offending fields **and** the command's schema-with-example so the retry needs no extra lookup. Unknown commands get did-you-mean suggestions. Missing-prerequisite errors name the exact discovery command (e.g. `documentFolderId` invalid → "run `acculynx documents folders`").
+3. **Bootstrap and search built in.**
+   - `acculynx guide` — a compact operational primer (the condensed `instructions.md`: entity model, contact-first job creation, key workflows) so an agent with no skill loaded can self-orient.
+   - `acculynx search <keyword>` — greps command names + descriptions ("insurance" → the 4 insurance-related commands). Cheaper than reading full help trees.
+4. **Context-frugal output.** List commands default to a **concise projection** (id + the few fields needed to pick a record: name/number, status/milestone, dates) with `_meta: {count, totalCount, nextStartIndex}` for pagination; `--full` returns complete records. `--fields a,b,c` selects arbitrary fields. Null/empty fields are stripped everywhere. Default page size 25.
+5. **Workflow hints in results.** Multi-step operations return a `_hints` array pointing to the natural next command (e.g. `jobs create` result: "assign reps with `acculynx jobs set-company-rep <jobId> --user <userId>`"). Hints are data, not prose mixed into the payload.
+6. **Ruthless consistency.** Same verbs everywhere (`list`/`get`/`create`/`update`/`delete`/`set-*`); same flag names for the same concepts across all commands (`--job`, `--contact`, `--user`, `--page-size`, `--start-index`, `--search`); dates always `YYYY-MM-DD`; UUIDs always plain strings. An agent that learned one group has learned them all.
+7. **Mutations are visible.** `--help` and `describe` label each command `[read]` or `[mutates]`, so the agent (and the human approving the Bash call) can tell at a glance.
+
 ## Discovery (progressive disclosure)
 
 - `acculynx --help` — groups, one line each
-- `acculynx jobs --help` — commands in group, one line each
-- `acculynx describe jobs create` — description, full JSON schema (via zod-to-json-schema), flag/positional mapping, and a worked example
+- `acculynx jobs --help` — commands in group, one line each, with `[read]`/`[mutates]` labels
+- `acculynx describe jobs create` — description, full JSON schema (via zod-to-json-schema), flag/positional mapping, and a **copy-pasteable example invocation**
+- `acculynx search <keyword>` and `acculynx guide` — see LLM-first ergonomics
 
 ## Output & errors
 
-- Default: JSON to stdout (`--format md` renders the ported `formatToolResponse` markdown).
-- Truncation: on by default at `CHARACTER_LIMIT` (20k chars) with a truncation notice; `--limit-chars N` and `--no-limit` to override.
-- Errors: mapped AccuLynx error message to stderr; exit codes — 0 ok, 1 API/runtime error, 2 usage/validation error.
+- Default: JSON to stdout (`--format md` renders the ported `formatToolResponse` markdown). Concise projections, `--full`, `--fields`, `_meta` pagination, and `_hints` per the LLM-first ergonomics section.
+- Truncation: on by default at `CHARACTER_LIMIT` (20k chars) with a truncation notice that tells the agent how to narrow the query (`--fields`, `--page-size`, filters); `--limit-chars N` and `--no-limit` to override.
+- Errors: structured JSON on stderr (`error.message`, `error.status`, `error.suggestion`); exit codes — 0 ok, 1 API/runtime error, 2 usage/validation error.
 - Retry/backoff exactly as ported (3 attempts, exponential + jitter, Retry-After honored; `ACCULYNX_RETRY_ATTEMPTS`, `ACCULYNX_TIMEOUT_MS` respected).
 
 ## Auth & config
@@ -139,8 +154,9 @@ Patriot-agent later adds `acculynx-cli` as an npm dependency (git URL or npm) an
 
 ## Testing
 
-- **Unit:** command factory (flag generation from zod, JSON/flag merging, positional promotion, validation errors), `describe` output, config resolution, error mapping, truncation.
-- **Smoke (live, gated on `ACCULYNX_API_KEY`):** `misc ping`, `users list`, `jobs list --page-size 1`, `settings milestones`, one `describe`. Read-only only.
+- **Unit:** command factory (flag generation from zod, JSON/flag merging, positional promotion, validation errors with schema+example replay), `describe` output, `search` matching, concise projections + `--fields`/`--full`, `_meta` pagination, `_hints`, config resolution, structured error JSON with suggestions, truncation notice content.
+- **Smoke (live, gated on `ACCULYNX_API_KEY`):** `misc ping`, `users list`, `jobs list --page-size 1`, `settings milestones`, one `describe`, `guide`, `search insurance`. Read-only only.
+- **Agent usability check:** after the build, a fresh Claude session with only the skill (no prior context) must complete "find job X and record a received payment" using discovery alone — the acceptance test for LLM ergonomics.
 - **Typecheck:** `tsc` against the freshly generated SDK is the port-correctness gate.
 
 ## Non-goals (v1)
