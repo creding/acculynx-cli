@@ -29,6 +29,24 @@ echo '{"apiKey": "..."}' > ~/.config/acculynx/config.json
 
 Optional: `ACCULYNX_SIGNER_EMAIL` (PDF signature identity), `ACCULYNX_TIMEOUT_MS`, `ACCULYNX_RETRY_ATTEMPTS` — all also settable in the config file (`signerEmail`, `timeoutMs`, `retryAttempts`). Env wins over file.
 
+Full resolution order: env vars > `~/.config/acculynx/config.json` > a `config.json` sitting next to the running bundle. The bundle-adjacent file exists so a deployment (e.g. a Claude plugin's `cli/` dir) can ship credentials with the CLI when neither env nor home config reach it. It is never committed — gitignored wherever the bundle lives in a repo.
+
+### Sandboxed environments (Cowork) — hardcoded-key escape hatch
+
+Cowork sandboxes forward none of the normal credential channels: user-settings env vars, `pluginConfigs`, and home-directory config files all fail to reach the CLI (anthropics/claude-code#39125), and in practice the bundle-adjacent `config.json` is not picked up there either — the sandbox invokes the bundle such that `process.argv[1]` does not resolve to the plugin's `cli/` directory, so the CLI never finds the adjacent file.
+
+The working fallback is to inject the credentials directly into the private local-marketplace copy of the bundle (`~/claude-local/acculynx-plugin/cli/acculynx.cjs`, installed as `acculynx@creding-local` — a directory-source marketplace that is not on git). Two lines are inserted immediately after `"use strict";`:
+
+```js
+process.env.ACCULYNX_API_KEY = process.env.ACCULYNX_API_KEY || "<key>";
+process.env.ACCULYNX_SIGNER_EMAIL = process.env.ACCULYNX_SIGNER_EMAIL || "<email>";
+```
+
+The `||` keeps real env vars winning when they do get through. Caveats:
+
+- **Re-inject after every bundle update.** Copying a fresh `dist/acculynx.cjs` into `~/claude-local` (and the installed cache under `~/.claude/plugins/cache/creding-local/acculynx/<version>/cli/`) wipes the injection.
+- **Never do this to a bundle that lands in a git repo** — the committed `dist/acculynx.cjs` here and the public `creding-plugins` copy must stay key-free. This is strictly for the private local marketplace.
+
 ## Discovery workflow
 
 ```bash
