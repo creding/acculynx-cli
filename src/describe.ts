@@ -12,7 +12,7 @@ export function runDescribe(group: string, verb: string): void {
     description: entry.config.description,
     mutates: Boolean(entry.config.approval),
     positional: entry.positional ?? null,
-    flags: shape.flags.map((f) => ({
+    flags: shape.flags.filter((f) => f.key !== entry.positional).map((f) => ({
       flag: `--${f.flag}`, type: f.type, required: f.required,
       ...(f.enumValues && { values: f.enumValues }), description: f.description,
     })),

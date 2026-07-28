@@ -22,7 +22,9 @@ function label(e: CommandEntry): string {
 }
 
 function firstSentence(s: string): string {
-  return s.split(/(?<=\.)\s/)[0];
+  // First ". " that isn't part of "e.g." / "i.e." — else the whole string.
+  const m = s.match(/^.*?(?<!\be\.g)(?<!\bi\.e)\.(?=\s)/);
+  return m ? m[0] : s;
 }
 
 function printRootHelp(): void {
