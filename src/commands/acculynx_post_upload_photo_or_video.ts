@@ -9,7 +9,12 @@ export default defineTool({
   inputSchema: z.object({
     jobId: z.string().describe("The job's unique identifier"),
     body: z.object({
-    file: z.string().describe("Local file name or path in the sandbox to be uploaded (e.g. 'photo.jpg')").optional(),
+    file: z
+      .string()
+      .describe(
+        "File to upload: a local path (e.g. 'photo.jpg'), an https URL (downloaded server-side, 25 MB max), or a data: URI with base64 content",
+      )
+      .optional(),
     description: z.string().describe("A brief description related to the file that is being uploaded.").optional(),
     tags: z.string().describe("A comma-separated list of 'GUID' to be applier to the photo or video. The tags should exist within the location.").optional(),
     fileUri: z.string().describe("The URI of the file to upload. This image will be uploaded if the 'File' field is not selected.").optional(),

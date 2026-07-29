@@ -3,6 +3,7 @@ import { ResponseFormat, CHARACTER_LIMIT } from "./constants.ts";
 
 import path from "path";
 import fs from "fs/promises";
+import os from "os";
 
 // Ensure compatibility with Node16 module resolution mapping default exports
 const sdk = (acculynxApiModule as any).default || acculynxApiModule;
@@ -148,11 +149,107 @@ export function formatToolResponse(data: unknown, format: ResponseFormat | undef
  * local filesystem. Returns the resolved absolute path when the file exists,
  * else null (callers then pass the raw string through to the SDK).
  */
+const MAX_REMOTE_FILE_BYTES = 25 * 1024 * 1024; // 25 MB — Vercel /tmp and function memory both accommodate this
+const REMOTE_FETCH_TIMEOUT_MS = 30_000;
+
+const MIME_EXTENSIONS: Record<string, string> = {
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/gif": ".gif",
+  "image/webp": ".webp",
+  "image/heic": ".heic",
+  "application/pdf": ".pdf",
+  "video/mp4": ".mp4",
+  "video/quicktime": ".mov",
+};
+
+function isPrivateHost(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal")) return true;
+  if (h === "::1" || h.startsWith("fe80:") || h.startsWith("fc") || h.startsWith("fd")) return true;
+  const octets = h.split(".").map(Number);
+  if (octets.length === 4 && octets.every((o) => Number.isInteger(o) && o >= 0 && o <= 255)) {
+    const [a, b] = octets;
+    if (a === 127 || a === 10 || a === 0) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 169 && b === 254) return true; // link-local, incl. cloud metadata endpoints
+  }
+  return false;
+}
+
+async function writeTempFile(data: Buffer, filename: string): Promise<{ path: string; cleanup: () => Promise<void> }> {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "acculynx-upload-"));
+  const filePath = path.join(dir, filename);
+  await fs.writeFile(filePath, data);
+  return { path: filePath, cleanup: () => fs.rm(dir, { recursive: true, force: true }) };
+}
+
+async function downloadRemoteFile(url: URL): Promise<{ path: string; cleanup: () => Promise<void> }> {
+  const insecureAllowed = !!process.env.ACCULYNX_ALLOW_INSECURE_FILE_URLS;
+  if (url.protocol !== "https:" && !insecureAllowed) {
+    throw new Error(`Only https file URLs are supported (got ${url.protocol}//).`);
+  }
+  if (isPrivateHost(url.hostname) && !insecureAllowed) {
+    throw new Error(`URL host "${url.hostname}" is private/internal and not allowed.`);
+  }
+  const res = await fetch(url, { signal: AbortSignal.timeout(REMOTE_FETCH_TIMEOUT_MS), redirect: "follow" });
+  if (!res.ok) throw new Error(`Failed to download ${url.href}: HTTP ${res.status}.`);
+  const declared = Number(res.headers.get("content-length"));
+  if (declared && declared > MAX_REMOTE_FILE_BYTES) {
+    throw new Error(`Remote file is too large (${declared} bytes; limit ${MAX_REMOTE_FILE_BYTES}).`);
+  }
+  const data = Buffer.from(await res.arrayBuffer());
+  if (data.length > MAX_REMOTE_FILE_BYTES) {
+    throw new Error(`Remote file is too large (${data.length} bytes; limit ${MAX_REMOTE_FILE_BYTES}).`);
+  }
+  const urlName = path.basename(url.pathname) || "";
+  const mimeExt = MIME_EXTENSIONS[(res.headers.get("content-type") ?? "").split(";")[0].trim()] ?? "";
+  const filename = urlName.includes(".") ? urlName : `download${mimeExt || ".bin"}`;
+  return writeTempFile(data, filename);
+}
+
+function decodeDataUri(uri: string): { data: Buffer; filename: string } {
+  const match = /^data:([^;,]*)(;base64)?,(.*)$/s.exec(uri);
+  if (!match) throw new Error("Malformed data URI.");
+  const [, mime, isBase64, payload] = match;
+  let data: Buffer;
+  if (isBase64) {
+    if (!/^[A-Za-z0-9+/=\s]*$/.test(payload) || payload.trim().length === 0) {
+      throw new Error("Malformed data URI: payload is not valid base64.");
+    }
+    data = Buffer.from(payload, "base64");
+    if (data.length === 0) throw new Error("Malformed data URI: empty base64 payload.");
+  } else {
+    data = Buffer.from(decodeURIComponent(payload), "utf8");
+  }
+  if (data.length > MAX_REMOTE_FILE_BYTES) {
+    throw new Error(`Inline file is too large (${data.length} bytes; limit ${MAX_REMOTE_FILE_BYTES}).`);
+  }
+  return { data, filename: `upload${MIME_EXTENSIONS[mime] ?? ".bin"}` };
+}
+
+/**
+ * Resolve a file input to a local path the SDK can upload.
+ * Accepts: an existing local path (never deleted by cleanup), an https URL
+ * (downloaded to a temp dir; cleanup removes it), or a data: URI (decoded to
+ * a temp dir). URL and data inputs are what make file uploads work through
+ * the hosted MCP server, which has no access to the caller's filesystem.
+ */
 export async function resolveSandboxFile(
   fileInput: string | undefined,
   _ctx: unknown,
 ): Promise<{ path: string; cleanup: () => Promise<void> } | null> {
   if (!fileInput || typeof fileInput !== "string") return null;
+
+  if (/^https?:\/\//i.test(fileInput)) {
+    return downloadRemoteFile(new URL(fileInput));
+  }
+  if (fileInput.startsWith("data:")) {
+    const { data, filename } = decodeDataUri(fileInput);
+    return writeTempFile(data, filename);
+  }
+
   const resolved = path.resolve(process.cwd(), fileInput);
   try {
     await fs.access(resolved);

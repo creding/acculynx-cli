@@ -9,7 +9,11 @@ export default defineTool({
   inputSchema: z.object({
     jobId: z.string().guid().describe("Target Job UUID where file will be uploaded"),
     documentFolderId: z.string().guid().describe("Target Folder UUID retrieved from acculynx_get_company_document_folders"),
-    file: z.string().describe("Local file name (e.g. 'proposal.pdf') or path in the sandbox to be uploaded"),
+    file: z
+      .string()
+      .describe(
+        "File to upload: a local path (e.g. 'proposal.pdf'), an https URL (downloaded server-side, 25 MB max), or a data: URI with base64 content",
+      ),
     description: z.string().optional().describe("Brief file context description"),
   }),
   async execute({ jobId, documentFolderId, file, description }, ctx) {
