@@ -39,6 +39,12 @@ Discovery-first workflow: \`acculynx --help\` (groups) → \`acculynx <group> --
 Use the job-scoped commands: \`acculynx financials for-job <jobId>\` (contract totals/worksheets),
 \`acculynx estimates list-for-job <jobId>\`, \`acculynx invoices list-for-job <jobId>\`,
 \`acculynx payments for-job <jobId>\`. Never guess external ledger ids.
+- Customer invoicing happens in QuickBooks, not AccuLynx: \`invoices list-for-job\` is usually
+  empty even on sold jobs. An empty result is not the end of the search — check QuickBooks
+  (QBO tools: find the customer by name, then their invoices). AccuLynx holds the
+  insurance-scope side (worksheets, estimates, payments received).
+- The same customer may be spelled differently across systems (e.g. "Reid" in AccuLynx,
+  "Reed" in QuickBooks) — search partial terms and variants before concluding a record is missing.
 
 ## Documents & reports
 Upload: resolve folder UUID via \`acculynx documents folders\`, then \`acculynx documents add\`.
