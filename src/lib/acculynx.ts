@@ -230,6 +230,22 @@ function decodeDataUri(uri: string): { data: Buffer; filename: string } {
 }
 
 /**
+ * For photo/video uploads: AccuLynx's multipart binary ingest has been observed
+ * to fail server-side (HTTP 500 "communications issue", reproducible with plain
+ * curl), while its fileUri mode — AccuLynx fetching the URL itself — works. So
+ * when the `file` input is an http(s) URL, hand it to AccuLynx as `fileUri`
+ * instead of downloading and re-uploading the bytes.
+ */
+export function preferFileUriForUrls<T extends { file?: string; fileUri?: string }>(body: T): T {
+  if (body.file && /^https?:\/\//i.test(body.file) && !body.fileUri) {
+    // Drop the file key entirely — the SDK rejects a present-but-undefined file param.
+    const { file, ...rest } = body;
+    return { ...rest, fileUri: file } as unknown as T;
+  }
+  return body;
+}
+
+/**
  * Resolve a file input to a local path the SDK can upload.
  * Accepts: an existing local path (never deleted by cleanup), an https URL
  * (downloaded to a temp dir; cleanup removes it), or a data: URI (decoded to

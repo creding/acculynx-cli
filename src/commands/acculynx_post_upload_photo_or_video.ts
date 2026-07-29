@@ -1,7 +1,13 @@
 import { defineTool } from "../lib/define-tool.ts";
 import { always } from "../lib/approval.ts";
 import { z } from "zod";
-import { getAccuLynxClient, handleApiError, formatToolResponse, resolveSandboxFiles } from "../lib/acculynx.ts";
+import {
+  getAccuLynxClient,
+  handleApiError,
+  formatToolResponse,
+  resolveSandboxFiles,
+  preferFileUriForUrls,
+} from "../lib/acculynx.ts";
 
 export default defineTool({
   description: "Upload a photo or video to a Job This mutates AccuLynx data and requires explicit human approval before it executes.",
@@ -23,11 +29,11 @@ export default defineTool({
   }),
   }),
   async execute({ body, jobId }, ctx) {
-    let resolvedBody = body;
+    let resolvedBody = preferFileUriForUrls(body);
     let cleanup = async () => {};
     try {
       const client = getAccuLynxClient();
-      const resolveRes = await resolveSandboxFiles(body, ctx);
+      const resolveRes = await resolveSandboxFiles(resolvedBody, ctx);
       resolvedBody = resolveRes.resolved;
       cleanup = resolveRes.cleanup;
 

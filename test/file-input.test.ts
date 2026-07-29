@@ -113,3 +113,30 @@ test("URLs pointing at private or loopback hosts are rejected", async () => {
     process.env.ACCULYNX_ALLOW_INSECURE_FILE_URLS = "1";
   }
 });
+
+// ---- URL→fileUri mapping for photo/video uploads ----
+// AccuLynx's multipart ingest 500s server-side (reproducible with plain curl),
+// but its fileUri mode — where AccuLynx fetches the URL itself — works. For
+// URL inputs to media upload, skip the download and hand the URL to AccuLynx.
+
+import { preferFileUriForUrls } from "../src/lib/acculynx.ts";
+
+test("https file input moves to fileUri untouched", () => {
+  const body = preferFileUriForUrls({ file: "https://example.com/roof.jpg", description: "d" });
+  assert.equal(body.fileUri, "https://example.com/roof.jpg");
+  assert.equal(body.file, undefined);
+  assert.equal(body.description, "d");
+});
+
+test("local path and data URI inputs stay on file", () => {
+  const local = preferFileUriForUrls({ file: "photo.jpg" });
+  assert.equal(local.file, "photo.jpg");
+  assert.equal(local.fileUri, undefined);
+  const data = preferFileUriForUrls({ file: "data:image/png;base64,AAAA" });
+  assert.equal(data.file, "data:image/png;base64,AAAA");
+});
+
+test("an explicit fileUri is left alone", () => {
+  const body = preferFileUriForUrls({ fileUri: "https://a.example/x.jpg" });
+  assert.equal(body.fileUri, "https://a.example/x.jpg");
+});
