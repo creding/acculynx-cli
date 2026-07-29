@@ -230,11 +230,14 @@ function decodeDataUri(uri: string): { data: Buffer; filename: string } {
 }
 
 /**
- * For photo/video uploads: AccuLynx's multipart binary ingest has been observed
- * to fail server-side (HTTP 500 "communications issue", reproducible with plain
- * curl), while its fileUri mode — AccuLynx fetching the URL itself — works. So
- * when the `file` input is an http(s) URL, hand it to AccuLynx as `fileUri`
- * instead of downloading and re-uploading the bytes.
+ * For photo/video uploads: when the `file` input is an http(s) URL, hand it to
+ * AccuLynx as `fileUri` — AccuLynx fetches the URL itself, which skips a
+ * pointless download+re-upload hop through this process.
+ *
+ * Known AccuLynx quirk discovered while testing: their multipart ingest
+ * returns 500 "File could not be uploaded due to a communications issue" for
+ * degenerate files (tiny synthetic PDFs, 1x1/64x64 images) — their content
+ * processing chokes, not the transport. Real-world PDFs and photos upload fine.
  */
 export function preferFileUriForUrls<T extends { file?: string; fileUri?: string }>(body: T): T {
   if (body.file && /^https?:\/\//i.test(body.file) && !body.fileUri) {

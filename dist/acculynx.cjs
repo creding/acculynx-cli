@@ -33346,7 +33346,7 @@ var $ZodCIDRv6 = /* @__PURE__ */ $constructor("$ZodCIDRv6", (inst, def) => {
     try {
       if (parts.length !== 2)
         throw new Error();
-      const [address, prefix] = parts;
+      const [address2, prefix] = parts;
       if (!prefix)
         throw new Error();
       const prefixNum = Number(prefix);
@@ -33354,7 +33354,7 @@ var $ZodCIDRv6 = /* @__PURE__ */ $constructor("$ZodCIDRv6", (inst, def) => {
         throw new Error();
       if (prefixNum < 0 || prefixNum > 128)
         throw new Error();
-      new URL(`http://[${address}]`);
+      new URL(`http://[${address2}]`);
     } catch {
       payload.issues.push({
         code: "invalid_format",
@@ -107984,6 +107984,7 @@ var index_default = createSDK;
 // src/lib/acculynx.ts
 var import_path = __toESM(require("path"), 1);
 var import_promises2 = __toESM(require("fs/promises"), 1);
+var import_os = __toESM(require("os"), 1);
 var sdk = index_default.default || index_default;
 var maxAttempts = () => Number(process.env.ACCULYNX_RETRY_ATTEMPTS) || 3;
 var RETRY_BASE_DELAY_MS = 500;
@@ -108076,8 +108077,96 @@ function formatToolResponse(data, format) {
     data: structuredRecord
   };
 }
+var MAX_REMOTE_FILE_BYTES = 25 * 1024 * 1024;
+var REMOTE_FETCH_TIMEOUT_MS = 3e4;
+var MIME_EXTENSIONS = {
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/gif": ".gif",
+  "image/webp": ".webp",
+  "image/heic": ".heic",
+  "application/pdf": ".pdf",
+  "video/mp4": ".mp4",
+  "video/quicktime": ".mov"
+};
+function isPrivateHost(hostname3) {
+  const h2 = hostname3.toLowerCase().replace(/^\[|\]$/g, "");
+  if (h2 === "localhost" || h2.endsWith(".localhost") || h2.endsWith(".local") || h2.endsWith(".internal")) return true;
+  if (h2 === "::1" || h2.startsWith("fe80:") || h2.startsWith("fc") || h2.startsWith("fd")) return true;
+  const octets = h2.split(".").map(Number);
+  if (octets.length === 4 && octets.every((o2) => Number.isInteger(o2) && o2 >= 0 && o2 <= 255)) {
+    const [a2, b] = octets;
+    if (a2 === 127 || a2 === 10 || a2 === 0) return true;
+    if (a2 === 192 && b === 168) return true;
+    if (a2 === 172 && b >= 16 && b <= 31) return true;
+    if (a2 === 169 && b === 254) return true;
+  }
+  return false;
+}
+async function writeTempFile(data, filename) {
+  const dir = await import_promises2.default.mkdtemp(import_path.default.join(import_os.default.tmpdir(), "acculynx-upload-"));
+  const filePath = import_path.default.join(dir, filename);
+  await import_promises2.default.writeFile(filePath, data);
+  return { path: filePath, cleanup: () => import_promises2.default.rm(dir, { recursive: true, force: true }) };
+}
+async function downloadRemoteFile(url2) {
+  const insecureAllowed = !!process.env.ACCULYNX_ALLOW_INSECURE_FILE_URLS;
+  if (url2.protocol !== "https:" && !insecureAllowed) {
+    throw new Error(`Only https file URLs are supported (got ${url2.protocol}//).`);
+  }
+  if (isPrivateHost(url2.hostname) && !insecureAllowed) {
+    throw new Error(`URL host "${url2.hostname}" is private/internal and not allowed.`);
+  }
+  const res = await fetch(url2, { signal: AbortSignal.timeout(REMOTE_FETCH_TIMEOUT_MS), redirect: "follow" });
+  if (!res.ok) throw new Error(`Failed to download ${url2.href}: HTTP ${res.status}.`);
+  const declared = Number(res.headers.get("content-length"));
+  if (declared && declared > MAX_REMOTE_FILE_BYTES) {
+    throw new Error(`Remote file is too large (${declared} bytes; limit ${MAX_REMOTE_FILE_BYTES}).`);
+  }
+  const data = Buffer.from(await res.arrayBuffer());
+  if (data.length > MAX_REMOTE_FILE_BYTES) {
+    throw new Error(`Remote file is too large (${data.length} bytes; limit ${MAX_REMOTE_FILE_BYTES}).`);
+  }
+  const urlName = import_path.default.basename(url2.pathname) || "";
+  const mimeExt = MIME_EXTENSIONS[(res.headers.get("content-type") ?? "").split(";")[0].trim()] ?? "";
+  const filename = urlName.includes(".") ? urlName : `download${mimeExt || ".bin"}`;
+  return writeTempFile(data, filename);
+}
+function decodeDataUri(uri) {
+  const match2 = /^data:([^;,]*)(;base64)?,(.*)$/s.exec(uri);
+  if (!match2) throw new Error("Malformed data URI.");
+  const [, mime, isBase64, payload] = match2;
+  let data;
+  if (isBase64) {
+    if (!/^[A-Za-z0-9+/=\s]*$/.test(payload) || payload.trim().length === 0) {
+      throw new Error("Malformed data URI: payload is not valid base64.");
+    }
+    data = Buffer.from(payload, "base64");
+    if (data.length === 0) throw new Error("Malformed data URI: empty base64 payload.");
+  } else {
+    data = Buffer.from(decodeURIComponent(payload), "utf8");
+  }
+  if (data.length > MAX_REMOTE_FILE_BYTES) {
+    throw new Error(`Inline file is too large (${data.length} bytes; limit ${MAX_REMOTE_FILE_BYTES}).`);
+  }
+  return { data, filename: `upload${MIME_EXTENSIONS[mime] ?? ".bin"}` };
+}
+function preferFileUriForUrls(body) {
+  if (body.file && /^https?:\/\//i.test(body.file) && !body.fileUri) {
+    const { file: file2, ...rest } = body;
+    return { ...rest, fileUri: file2 };
+  }
+  return body;
+}
 async function resolveSandboxFile(fileInput, _ctx) {
   if (!fileInput || typeof fileInput !== "string") return null;
+  if (/^https?:\/\//i.test(fileInput)) {
+    return downloadRemoteFile(new URL(fileInput));
+  }
+  if (fileInput.startsWith("data:")) {
+    const { data, filename } = decodeDataUri(fileInput);
+    return writeTempFile(data, filename);
+  }
   const resolved = import_path.default.resolve(process.cwd(), fileInput);
   try {
     await import_promises2.default.access(resolved);
@@ -109142,6 +109231,78 @@ var acculynx_create_contact_default = defineAcculynxTool({
   }
 });
 
+// src/commands/acculynx_update_contact.ts
+var address = external_exports.object({
+  street1: external_exports.string().optional(),
+  street2: external_exports.string().optional(),
+  city: external_exports.string().optional(),
+  zipCode: external_exports.string().optional(),
+  state: external_exports.object({
+    id: external_exports.number().describe("Numeric state id (retrieve via acculynx_get_accu_lynx_states)")
+  }).optional(),
+  country: external_exports.object({
+    id: external_exports.number().describe("Numeric country id (retrieve via acculynx_get_accu_lynx_countries)")
+  }).optional()
+});
+var acculynx_update_contact_default = defineAcculynxTool({
+  description: "Update an existing contact's profile (name, company, cross reference, mailing/billing address). The API treats this as a full replacement: contactTypeIds (retrieve via acculynx_get_contact_types) and lastName are required on every call, and omitted optional fields may be cleared \u2014 fetch the contact first and resend values you want to keep. Phone numbers and email addresses are managed separately (acculynx_add_contact_phone_number / acculynx_add_contact_email_address). This mutates AccuLynx data and requires explicit human approval before it executes.",
+  approval: always(),
+  inputSchema: external_exports.object({
+    contactId: external_exports.string().describe("The contact's unique identifier"),
+    body: external_exports.object({
+      contactTypeIds: external_exports.array(external_exports.string().guid()).min(1).describe("Contact type UUIDs (retrieve via acculynx_get_contact_types); required by the API on every update"),
+      firstName: external_exports.string().max(50).optional().describe("First name of the contact"),
+      lastName: external_exports.string().max(50).describe("Last name of the contact (required by the API on every update)"),
+      crossReference: external_exports.string().max(250).optional().describe("CrossReference identifier of the contact"),
+      companyName: external_exports.string().max(100).optional().describe("Company name of the contact"),
+      companyJobTitle: external_exports.string().optional().describe("Job title of the contact"),
+      mailingAddress: address.optional(),
+      billingAddress: address.optional(),
+      billingAddressSameAsMailingAddress: external_exports.boolean().optional().describe("Set true to copy the mailing address to the billing address")
+    })
+  }),
+  async call(client2, { body, contactId }) {
+    const res = await client2.putContact(body, { contactId });
+    return res.data || { success: true, message: "Contact updated." };
+  }
+});
+
+// src/commands/acculynx_add_contact_email_address.ts
+var acculynx_add_contact_email_address_default = defineAcculynxTool({
+  description: "Add a new email address to an existing contact. The first email added becomes the contact's primary address. This mutates AccuLynx data and requires explicit human approval before it executes.",
+  approval: always(),
+  inputSchema: external_exports.object({
+    contactId: external_exports.string().describe("The contact's unique identifier"),
+    body: external_exports.object({
+      address: external_exports.string().email().describe("Valid email address"),
+      type: external_exports.enum(["Personal", "Work", "Other"]).default("Personal").describe("Classification of the email address")
+    })
+  }),
+  async call(client2, { body, contactId }) {
+    const res = await client2.postContactEmailAddresses(body, { contactId });
+    return res.data || { success: true, message: "Email address added." };
+  }
+});
+
+// src/commands/acculynx_add_contact_phone_number.ts
+var acculynx_add_contact_phone_number_default = defineAcculynxTool({
+  description: "Add a new phone number to an existing contact. The first number added becomes the contact's primary number. This mutates AccuLynx data and requires explicit human approval before it executes.",
+  approval: always(),
+  inputSchema: external_exports.object({
+    contactId: external_exports.string().describe("The contact's unique identifier"),
+    body: external_exports.object({
+      number: external_exports.string().regex(/^\d{10}$/, "Must be exactly 10 digits without delimiters").describe("10 digit phone number"),
+      ext: external_exports.string().optional().describe("Extension"),
+      type: external_exports.enum(["Home", "Mobile", "Work"]).default("Home").describe("Classification of the phone number"),
+      smsOptOut: external_exports.boolean().optional().describe("Whether SMS messaging is opted out for this number")
+    })
+  }),
+  async call(client2, { body, contactId }) {
+    const res = await client2.postContactPhoneNumber(body, { contactId });
+    return res.data || { success: true, message: "Phone number added." };
+  }
+});
+
 // src/commands/acculynx_get_contact_types.ts
 var acculynx_get_contact_types_default = defineAcculynxTool({
   description: "Retrieve valid contact assignment categories (e.g. Customer, Subcontractor, Supplier) and their UUID identifiers (used as contactTypeIds when creating contacts).",
@@ -109747,7 +109908,9 @@ var acculynx_add_job_document_default = defineTool({
   inputSchema: external_exports.object({
     jobId: external_exports.string().guid().describe("Target Job UUID where file will be uploaded"),
     documentFolderId: external_exports.string().guid().describe("Target Folder UUID retrieved from acculynx_get_company_document_folders"),
-    file: external_exports.string().describe("Local file name (e.g. 'proposal.pdf') or path in the sandbox to be uploaded"),
+    file: external_exports.string().describe(
+      "File to upload: a local path (e.g. 'proposal.pdf'), an https URL (downloaded server-side, 25 MB max), or a data: URI with base64 content"
+    ),
     description: external_exports.string().optional().describe("Brief file context description")
   }),
   async execute({ jobId, documentFolderId, file: file2, description }, ctx) {
@@ -109792,7 +109955,9 @@ var acculynx_post_upload_photo_or_video_default = defineTool({
   inputSchema: external_exports.object({
     jobId: external_exports.string().describe("The job's unique identifier"),
     body: external_exports.object({
-      file: external_exports.string().describe("Local file name or path in the sandbox to be uploaded (e.g. 'photo.jpg')").optional(),
+      file: external_exports.string().describe(
+        "File to upload: a local path (e.g. 'photo.jpg'), an https URL (downloaded server-side, 25 MB max), or a data: URI with base64 content"
+      ).optional(),
       description: external_exports.string().describe("A brief description related to the file that is being uploaded.").optional(),
       tags: external_exports.string().describe("A comma-separated list of 'GUID' to be applier to the photo or video. The tags should exist within the location.").optional(),
       fileUri: external_exports.string().describe("The URI of the file to upload. This image will be uploaded if the 'File' field is not selected.").optional(),
@@ -109801,12 +109966,12 @@ var acculynx_post_upload_photo_or_video_default = defineTool({
     })
   }),
   async execute({ body, jobId }, ctx) {
-    let resolvedBody = body;
+    let resolvedBody = preferFileUriForUrls(body);
     let cleanup = async () => {
     };
     try {
       const client2 = getAccuLynxClient();
-      const resolveRes = await resolveSandboxFiles(body, ctx);
+      const resolveRes = await resolveSandboxFiles(resolvedBody, ctx);
       resolvedBody = resolveRes.resolved;
       cleanup = resolveRes.cleanup;
       const res = await client2.postUploadPhotoOrVideo(resolvedBody, { jobId });
@@ -111061,6 +111226,16 @@ var REGISTRY = [
     config: acculynx_create_contact_default,
     hints: [`Create a job for this contact: acculynx jobs create --json '{"contact":{"id":"<id>"}}'`]
   },
+  {
+    group: "contacts",
+    verb: "update",
+    tool: "acculynx_update_contact",
+    config: acculynx_update_contact_default,
+    positional: "contactId",
+    hints: ["Add phone/email separately: acculynx contacts add-phone <contactId> / add-email <contactId>"]
+  },
+  { group: "contacts", verb: "add-email", tool: "acculynx_add_contact_email_address", config: acculynx_add_contact_email_address_default, positional: "contactId" },
+  { group: "contacts", verb: "add-phone", tool: "acculynx_add_contact_phone_number", config: acculynx_add_contact_phone_number_default, positional: "contactId" },
   { group: "contacts", verb: "types", tool: "acculynx_get_contact_types", config: acculynx_get_contact_types_default },
   { group: "contacts", verb: "add-log", tool: "acculynx_add_contact_log", config: acculynx_add_contact_log_default, positional: "contactId" },
   { group: "contacts", verb: "phone-numbers", tool: "acculynx_get_contact_phone_numbers", config: acculynx_get_contact_phone_numbers_default, positional: "contactId" },
@@ -111436,11 +111611,11 @@ function renderOutput(payload, opts) {
 }
 
 // src/describe.ts
-function runDescribe(group, verb) {
+function describeCommand(group, verb) {
   const entry = findEntry(group, verb);
   if (!entry) throw new UsageError(`Unknown command: "${group} ${verb}".`, `Run: acculynx search ${verb}`);
   const shape = introspect(entry.config.inputSchema);
-  console.log(JSON.stringify({
+  return {
     command: `acculynx ${group} ${verb}`,
     description: entry.config.description,
     mutates: Boolean(entry.config.approval),
@@ -111455,24 +111630,29 @@ function runDescribe(group, verb) {
     jsonFields: shape.jsonFields,
     schema: shape.jsonSchema,
     example: makeExample(entry, shape)
-  }, null, 1));
+  };
 }
-function runSearch(keyword) {
+function searchCommands(keyword) {
   const q = keyword.toLowerCase();
   const matches = REGISTRY.filter(
     (e) => e.group.includes(q) || e.verb.includes(q) || e.tool.includes(q) || e.config.description.toLowerCase().includes(q)
   );
   if (matches.length === 0) {
-    console.log(JSON.stringify({ matches: [], suggestion: "Try a broader keyword, or run: acculynx --help" }, null, 1));
-    return;
+    return { matches: [], suggestion: "Try a broader keyword, or run: acculynx --help" };
   }
-  console.log(JSON.stringify({
+  return {
     matches: matches.map((e) => ({
       command: `acculynx ${e.group} ${e.verb}`,
       mutates: Boolean(e.config.approval),
       description: e.config.description
     }))
-  }, null, 1));
+  };
+}
+function runDescribe(group, verb) {
+  console.log(JSON.stringify(describeCommand(group, verb), null, 1));
+}
+function runSearch(keyword) {
+  console.log(JSON.stringify(searchCommands(keyword), null, 1));
 }
 
 // src/guide.ts
