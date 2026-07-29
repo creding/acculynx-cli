@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { buildServer, MCP_SERVER_VERSION } from "./server.ts";
+import { oauthHandler, verifyAccessToken } from "./oauth.ts";
 import { applyConfig } from "../lib/config.ts";
 
 applyConfig();
@@ -19,11 +20,19 @@ function secretMatches(provided: string, expected: string): boolean {
 }
 
 function authorized(req: IncomingMessage): boolean {
-  const expected = process.env.MCP_AUTH_TOKEN;
-  if (!expected) return false; // fail closed: no token configured means no access
   const header = req.headers.authorization;
   if (!header || !header.startsWith("Bearer ")) return false;
-  return secretMatches(header.slice(7).trim(), expected);
+  const presented = header.slice(7).trim();
+
+  // Static token: the pre-OAuth credential, kept for curl and scripts.
+  const expected = process.env.MCP_AUTH_TOKEN;
+  if (expected && secretMatches(presented, expected)) return true;
+
+  // Self-issued OAuth access token (see oauth.ts).
+  const signingSecret = process.env.SIGNING_SECRET;
+  if (signingSecret && verifyAccessToken(presented, signingSecret)) return true;
+
+  return false; // fail closed: nothing configured means no access
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -44,8 +53,15 @@ export default async function handler(req: IncomingMessage & { body?: unknown },
     return sendJson(res, 200, { ok: true, server: "acculynx", version: MCP_SERVER_VERSION });
   }
 
+  if (await oauthHandler(req, res)) return;
+
   if (!authorized(req)) {
-    res.setHeader("WWW-Authenticate", 'Bearer realm="acculynx-mcp"');
+    const proto = (req.headers["x-forwarded-proto"] as string | undefined)?.split(",")[0]?.trim() || "http";
+    const host = (req.headers["x-forwarded-host"] as string | undefined) || req.headers.host || "localhost";
+    res.setHeader(
+      "WWW-Authenticate",
+      `Bearer realm="acculynx-mcp", resource_metadata="${proto}://${host}/.well-known/oauth-protected-resource"`,
+    );
     return sendJson(res, 401, {
       jsonrpc: "2.0",
       error: { code: -32001, message: "Unauthorized: missing or invalid bearer token." },
