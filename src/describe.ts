@@ -3,11 +3,32 @@ import { UsageError } from "./lib/errors.ts";
 import { introspect } from "./lib/schema-to-flags.ts";
 import { makeExample } from "./lib/run-command.ts";
 
-export function runDescribe(group: string, verb: string): void {
+export interface DescribeResult {
+  command: string;
+  description: string;
+  mutates: boolean;
+  positional: string | null;
+  flags: Array<{ flag: string; type: string; required: boolean; values?: string[]; description: string }>;
+  jsonFields: unknown;
+  schema: Record<string, any>;
+  example: string;
+}
+
+export interface SearchResult {
+  matches: Array<{ command: string; mutates: boolean; description: string }>;
+  suggestion?: string;
+}
+
+/**
+ * Transport-agnostic describe. Returns the structured payload so the CLI (which
+ * prints it) and the MCP server (which returns it as tool output) share one
+ * implementation and can never drift.
+ */
+export function describeCommand(group: string, verb: string): DescribeResult {
   const entry = findEntry(group, verb);
   if (!entry) throw new UsageError(`Unknown command: "${group} ${verb}".`, `Run: acculynx search ${verb}`);
   const shape = introspect(entry.config.inputSchema);
-  console.log(JSON.stringify({
+  return {
     command: `acculynx ${group} ${verb}`,
     description: entry.config.description,
     mutates: Boolean(entry.config.approval),
@@ -19,10 +40,11 @@ export function runDescribe(group: string, verb: string): void {
     jsonFields: shape.jsonFields,
     schema: shape.jsonSchema,
     example: makeExample(entry, shape),
-  }, null, 1));
+  };
 }
 
-export function runSearch(keyword: string): void {
+/** Transport-agnostic keyword search over the command registry. */
+export function searchCommands(keyword: string): SearchResult {
   const q = keyword.toLowerCase();
   const matches = REGISTRY.filter(
     (e) =>
@@ -30,14 +52,21 @@ export function runSearch(keyword: string): void {
       e.config.description.toLowerCase().includes(q),
   );
   if (matches.length === 0) {
-    console.log(JSON.stringify({ matches: [], suggestion: "Try a broader keyword, or run: acculynx --help" }, null, 1));
-    return;
+    return { matches: [], suggestion: "Try a broader keyword, or run: acculynx --help" };
   }
-  console.log(JSON.stringify({
+  return {
     matches: matches.map((e) => ({
       command: `acculynx ${e.group} ${e.verb}`,
       mutates: Boolean(e.config.approval),
       description: e.config.description,
     })),
-  }, null, 1));
+  };
+}
+
+export function runDescribe(group: string, verb: string): void {
+  console.log(JSON.stringify(describeCommand(group, verb), null, 1));
+}
+
+export function runSearch(keyword: string): void {
+  console.log(JSON.stringify(searchCommands(keyword), null, 1));
 }

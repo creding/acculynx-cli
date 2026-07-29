@@ -14,18 +14,26 @@
     "build": "esbuild src/index.ts --bundle --platform=node --format=cjs --banner:js='#!/usr/bin/env node' --outfile=dist/acculynx.cjs && chmod +x dist/acculynx.cjs",
     "dev": "tsx src/index.ts",
     "test": "node --import tsx --test test/*.test.ts",
-    "smoke": "tsx test/smoke.ts"
+    "smoke": "tsx test/smoke.ts",
+    "build:mcp": "node scripts/build-mcp.mjs",
+    "test:mcp": "npm run build:mcp:local && node test/mcp-local.mjs",
+    "build:mcp:local": "esbuild src/mcp/http-entry.ts --bundle --platform=node --target=node22 --format=esm --outfile=api/mcp.js --banner:js=\"import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);\"",
+    "vercel-build": "npm run build:mcp"
   },
   "devDependencies": {
+    "@api/acculynxapi": "file:.api/apis/acculynxapi",
     "@types/node": "^22.10.0",
     "esbuild": "^0.24.0",
+    "pdf-lib": "^1.17.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
-    "@api/acculynxapi": "file:.api/apis/acculynxapi",
-    "pdf-lib": "^1.17.1",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@modelcontextprotocol/sdk": "1.30.0"
   },
   "files": [
     "dist"
-  ]
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0"
+  }
 }

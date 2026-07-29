@@ -1,0 +1,181 @@
+/**
+ * Local smoke test for the MCP HTTP endpoint.
+ *
+ * Boots the bundled handler behind a plain node server (mimicking Vercel's
+ * body-parsing) and drives a real MCP session over Streamable HTTP.
+ * Run: node test/mcp-local.mjs
+ */
+import http from "node:http";
+import handler from "../api/mcp.js";
+
+const TOKEN = "test-token-abc123";
+process.env.MCP_AUTH_TOKEN = TOKEN;
+process.env.ACCULYNX_API_KEY = process.env.ACCULYNX_API_KEY || "dummy-key-for-local-test";
+
+const server = http.createServer((req, res) => {
+  const chunks = [];
+  req.on("data", (c) => chunks.push(c));
+  req.on("end", () => {
+    const raw = Buffer.concat(chunks).toString("utf8");
+    // Vercel's Node runtime pre-parses JSON bodies; mirror that.
+    if (raw) {
+      try {
+        req.body = JSON.parse(raw);
+      } catch {
+        req.body = raw;
+      }
+    }
+    handler(req, res).catch((e) => {
+      console.error("handler threw:", e);
+      if (!res.headersSent) res.statusCode = 500;
+      res.end();
+    });
+  });
+});
+
+await new Promise((r) => server.listen(0, r));
+const base = `http://127.0.0.1:${server.address().port}`;
+
+let id = 0;
+async function rpc(method, params, { token = TOKEN } = {}) {
+  const res = await fetch(base, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ jsonrpc: "2.0", id: ++id, method, params }),
+  });
+  const text = await res.text();
+  if (!res.ok) return { status: res.status, body: text.slice(0, 200) };
+  // Streamable HTTP replies as SSE; pull the data frame out.
+  const line = text.split("\n").find((l) => l.startsWith("data:"));
+  const payload = line ? JSON.parse(line.slice(5).trim()) : JSON.parse(text);
+  return { status: res.status, payload };
+}
+
+const results = [];
+function check(name, pass, detail) {
+  results.push({ name, pass, detail });
+  console.log(`${pass ? "PASS" : "FAIL"}  ${name}${detail ? `  — ${detail}` : ""}`);
+}
+
+// 1. unauthenticated is rejected
+{
+  const r = await rpc("initialize", {}, { token: null });
+  check("rejects missing token", r.status === 401, `status ${r.status}`);
+}
+// 2. wrong token is rejected
+{
+  const r = await rpc("initialize", {}, { token: "wrong-token-abc123" });
+  check("rejects wrong token", r.status === 401, `status ${r.status}`);
+}
+// 3. initialize handshake
+{
+  const r = await rpc("initialize", {
+    protocolVersion: "2025-06-18",
+    capabilities: {},
+    clientInfo: { name: "smoke", version: "0" },
+  });
+  const info = r.payload?.result?.serverInfo;
+  const instr = r.payload?.result?.instructions || "";
+  check("initialize handshake", info?.name === "acculynx", `serverInfo=${JSON.stringify(info)}`);
+  check("ships instructions", instr.length > 500, `${instr.length} chars`);
+}
+// 4. tools/list
+{
+  const r = await rpc("tools/list", {});
+  const names = (r.payload?.result?.tools ?? []).map((t) => t.name).sort();
+  check(
+    "exposes exactly 3 meta-tools",
+    names.length === 3 && names.join(",") === "acculynx_describe,acculynx_run,acculynx_search",
+    names.join(","),
+  );
+}
+// 5. search
+{
+  const r = await rpc("tools/call", { name: "acculynx_search", arguments: { query: "payment" } });
+  const text = r.payload?.result?.content?.[0]?.text ?? "";
+  const parsed = JSON.parse(text);
+  check("search finds payment commands", parsed.matches?.length > 0, `${parsed.matches?.length} matches`);
+}
+// 6. search with no query lists everything
+{
+  const r = await rpc("tools/call", { name: "acculynx_search", arguments: {} });
+  const parsed = JSON.parse(r.payload?.result?.content?.[0]?.text ?? "{}");
+  check("empty search lists all commands", parsed.commands?.length >= 120, `${parsed.commands?.length} commands`);
+}
+// 7. describe
+{
+  const r = await rpc("tools/call", { name: "acculynx_describe", arguments: { command: "jobs get" } });
+  const parsed = JSON.parse(r.payload?.result?.content?.[0]?.text ?? "{}");
+  check(
+    "describe returns schema + example",
+    parsed.schema?.properties?.jobId && parsed.example?.includes("jobs get"),
+    parsed.example,
+  );
+}
+// 8. describe tolerates "acculynx jobs get" and "jobs.get"
+{
+  const a = await rpc("tools/call", { name: "acculynx_describe", arguments: { command: "acculynx jobs get" } });
+  const b = await rpc("tools/call", { name: "acculynx_describe", arguments: { command: "jobs.get" } });
+  const ta = JSON.parse(a.payload?.result?.content?.[0]?.text ?? "{}");
+  const tb = JSON.parse(b.payload?.result?.content?.[0]?.text ?? "{}");
+  check("accepts command name variants", ta.command === "acculynx jobs get" && tb.command === "acculynx jobs get");
+}
+// 9. unknown command gives a useful error
+{
+  const r = await rpc("tools/call", { name: "acculynx_describe", arguments: { command: "jobs frobnicate" } });
+  const isErr = r.payload?.result?.isError === true;
+  const parsed = JSON.parse(r.payload?.result?.content?.[0]?.text ?? "{}");
+  check("unknown command errors with suggestion", isErr && !!parsed.error?.suggestion, parsed.error?.suggestion);
+}
+// 10. validation failure replays the schema
+{
+  const r = await rpc("tools/call", { name: "acculynx_run", arguments: { command: "jobs get", input: {} } });
+  const parsed = JSON.parse(r.payload?.result?.content?.[0]?.text ?? "{}");
+  check(
+    "missing required input returns schema replay",
+    r.payload?.result?.isError === true && Array.isArray(parsed.error?.issues) && !!parsed.error?.schema,
+    JSON.stringify(parsed.error?.issues),
+  );
+}
+// 11. bad UUID is caught before any network call
+{
+  const r = await rpc("tools/call", {
+    name: "acculynx_run",
+    arguments: { command: "jobs get", input: { jobId: "not-a-uuid" } },
+  });
+  const parsed = JSON.parse(r.payload?.result?.content?.[0]?.text ?? "{}");
+  check("invalid uuid rejected locally", r.payload?.result?.isError === true, JSON.stringify(parsed.error?.issues));
+}
+// 12. PDF report commands are refused with a pointer
+{
+  const r = await rpc("tools/call", {
+    name: "acculynx_run",
+    arguments: { command: "reports coc", input: { jobId: "3fa85f64-5717-4562-b3fc-2c963f66afa6" } },
+  });
+  const parsed = JSON.parse(r.payload?.result?.content?.[0]?.text ?? "{}");
+  check(
+    "PDF report commands refused cleanly",
+    r.payload?.result?.isError === true && /not available over MCP/.test(parsed.error?.message ?? ""),
+    parsed.error?.message,
+  );
+}
+// 13. a real read attempt reaches the network boundary
+{
+  const r = await rpc("tools/call", {
+    name: "acculynx_run",
+    arguments: { command: "misc ping", input: {} },
+  });
+  const parsed = JSON.parse(r.payload?.result?.content?.[0]?.text ?? "{}");
+  const msg = parsed.error?.message ?? "";
+  const reachedNetwork = /Forbidden|fetch failed|host_not_allowed|401|403/i.test(msg);
+  check("run reaches the AccuLynx call (network blocked in sandbox)", reachedNetwork, msg.slice(0, 120));
+}
+
+server.close();
+const failed = results.filter((r) => !r.pass);
+console.log(`\n${results.length - failed.length}/${results.length} passed`);
+process.exit(failed.length ? 1 : 0);
