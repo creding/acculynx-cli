@@ -78,8 +78,10 @@ npm run test:mcp
 Boots the bundled handler behind a local HTTP server and drives a real MCP
 session: auth rejection, handshake, tool listing, search, describe, argument
 validation, and error mapping. The final case asserts that `acculynx_run`
-reaches the AccuLynx network boundary — it fails inside a sandbox with no
-egress, which is the expected result there.
+reaches the AccuLynx network boundary and passes in any environment: with
+real egress the ping succeeds, and in an egress-blocked sandbox the
+network/auth-shaped error counts too. Only local validation or routing
+errors fail it.
 
 ## Uploading files
 

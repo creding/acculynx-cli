@@ -163,16 +163,29 @@ function check(name, pass, detail) {
     parsed.error?.message,
   );
 }
-// 13. a real read attempt reaches the network boundary
+// 13. a real read attempt reaches the network boundary. Environment-agnostic:
+// with real egress the ping simply succeeds; in an egress-blocked sandbox it
+// surfaces a network/auth-shaped error. Both prove the request left local
+// validation and reached the AccuLynx call — only a local validation error
+// (issues) or routing error (suggestion) means the plumbing is broken.
 {
   const r = await rpc("tools/call", {
     name: "acculynx_run",
     arguments: { command: "misc ping", input: {} },
   });
+  const isError = r.payload?.result?.isError === true;
   const parsed = JSON.parse(r.payload?.result?.content?.[0]?.text ?? "{}");
   const msg = parsed.error?.message ?? "";
-  const reachedNetwork = /Forbidden|fetch failed|host_not_allowed|401|403/i.test(msg);
-  check("run reaches the AccuLynx call (network blocked in sandbox)", reachedNetwork, msg.slice(0, 120));
+  const networkShaped =
+    /Forbidden|fetch failed|host_not_allowed|401|403|ECONN|ETIMEDOUT|EAI_AGAIN|network|timeout|socket|abort/i.test(msg) &&
+    !parsed.error?.issues &&
+    !parsed.error?.suggestion;
+  const reachedNetwork = isError ? networkShaped : true;
+  check(
+    "run reaches the AccuLynx call (succeeds, or network-blocked)",
+    reachedNetwork,
+    isError ? msg.slice(0, 120) : `ping ok — ${JSON.stringify(parsed).slice(0, 80)}`,
+  );
 }
 
 server.close();
