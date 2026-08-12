@@ -13,6 +13,12 @@ test("instructions teach all remote file input forms", () => {
   assert.match(INSTRUCTIONS, /bare base64|raw base64/i);
 });
 
+test("instructions lead with the direct-upload flow", () => {
+  assert.match(INSTRUCTIONS, /acculynx_request_upload/, "must name the mint tool");
+  assert.match(INSTRUCTIONS, /--data-binary/, "must show the curl PUT shape");
+  assert.match(INSTRUCTIONS, /409[\s\S]{0,120}(retry|used)/i, "must state 409 do-not-retry semantics");
+});
+
 test("instructions cover fileName and async 202 ingest", () => {
   assert.match(INSTRUCTIONS, /fileName/, "must mention the explicit fileName parameter");
   assert.match(INSTRUCTIONS, /202|asynchronous/i, "must warn that document ingest is async with no id returned");

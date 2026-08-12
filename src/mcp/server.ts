@@ -9,6 +9,7 @@ import { validateInput, postprocess, type GlobalOptions } from "../lib/run-comma
 import { getAccuLynxClient, handleApiError } from "../lib/acculynx.ts";
 import { requireApiKey } from "../lib/config.ts";
 import { CHARACTER_LIMIT } from "../lib/constants.ts";
+import { mintUploadTicket, UPLOAD_MAX_BYTES, UPLOAD_TICKET_TTL_S } from "./uploads.ts";
 
 export const MCP_SERVER_VERSION = "0.1.0";
 
@@ -79,8 +80,19 @@ Groups: ${GROUP_ORDER.join(", ")}.
 ## Uploading files
 
 This server has no access to your filesystem — a local path in a file input cannot work here.
-File-bearing commands ("documents add", "photos upload", the measurements uploads) instead accept
-the file content itself, in any of these string forms:
+
+**Preferred: direct upload (zero bytes through context).** Call \`acculynx_request_upload\`
+with jobId, documentFolderId, and fileName; it returns a single-use PUT URL (10-minute expiry,
+${UPLOAD_MAX_BYTES} bytes max). Send the raw file from your shell:
+
+    curl -sS -X PUT -H "Content-Type: application/octet-stream" --data-binary @file.pdf "<uploadUrl>"
+
+The response is a receipt with byte count and sha256 — compare against the local file to
+confirm integrity. A 409 means the ticket was already used: DO NOT retry (the first upload
+likely landed and cannot be deleted); a 502 means AccuLynx rejected it and one retry is safe.
+
+**Fallback: inline content.** File-bearing commands ("documents add", "photos upload", the
+measurements uploads) also accept the file content itself, in any of these string forms:
 
 - **https URL** — fetched server-side (photo/video uploads hand the URL to AccuLynx directly).
   Use this for anything over ~3 MB.
@@ -103,11 +115,58 @@ provides no API to list, fetch, or delete a job's documents, so there is no id t
 no way to confirm or undo an upload here. Verify in the AccuLynx UI, and do not blind-retry a
 timed-out upload (it may have landed).`;
 
-export function buildServer(): McpServer {
+export function buildServer(opts: { baseUrl?: string } = {}): McpServer {
   const server = new McpServer(
     { name: "acculynx", version: MCP_SERVER_VERSION },
     { instructions: INSTRUCTIONS },
   );
+
+  // Registered only when the deployment can sign tickets (same secret as OAuth).
+  if (process.env.SIGNING_SECRET) {
+    server.registerTool(
+      "acculynx_request_upload",
+      {
+        title: "Request a direct-upload URL for a job document",
+        description:
+          "Mint a single-use, 10-minute PUT URL bound to a job, document folder, and filename. " +
+          "PUT the raw file bytes to it (curl --data-binary @file) — no base64, no bytes through " +
+          "context. Returns uploadUrl, expiresAt, maxBytes, and a ready-to-run curl example. " +
+          "The response to the PUT is a receipt with sha256 and byte count. On 409 (ticket already " +
+          "used) do NOT retry — the first upload likely landed and AccuLynx has no delete API.",
+        inputSchema: {
+          jobId: z.string().describe("Target Job UUID"),
+          documentFolderId: z.string().describe(
+            "Target folder UUID from \"documents folders\" (acculynx_run: documents folders)",
+          ),
+          fileName: z.string().min(1).describe(
+            'Filename to store in AccuLynx, e.g. "McPherson Supplement 1.pdf"',
+          ),
+          contentType: z.string().optional().describe("MIME type of the file (informational)"),
+          description: z.string().optional().describe("Brief file context description"),
+        },
+      },
+      async ({ jobId, documentFolderId, fileName, contentType, description }) => {
+        try {
+          const secret = process.env.SIGNING_SECRET!;
+          const ticket = mintUploadTicket({ jobId, documentFolderId, fileName, contentType, description }, secret);
+          const uploadUrl = `${opts.baseUrl ?? ""}/api/uploads/${encodeURIComponent(ticket)}`;
+          return ok({
+            uploadUrl,
+            method: "PUT",
+            expiresAt: new Date(Date.now() + UPLOAD_TICKET_TTL_S * 1000).toISOString(),
+            maxBytes: UPLOAD_MAX_BYTES,
+            curlExample: `curl -sS -X PUT -H "Content-Type: application/octet-stream" --data-binary @"${fileName}" "${uploadUrl}"`,
+            _note:
+              "Single-use. 200 → receipt with sha256 (verify against your local file). " +
+              "409 → already used, do not retry. 502 → AccuLynx rejected it, one retry is safe. " +
+              "410 → expired, request a new URL.",
+          });
+        } catch (error) {
+          return toolError(error);
+        }
+      },
+    );
+  }
 
   server.registerTool(
     "acculynx_search",

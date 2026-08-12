@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { buildServer, MCP_SERVER_VERSION } from "./server.ts";
 import { oauthHandler, verifyAccessToken } from "./oauth.ts";
+import { handleUploadRequest } from "./uploads.ts";
 import { applyConfig } from "../lib/config.ts";
 
 applyConfig();
@@ -55,12 +56,20 @@ export default async function handler(req: IncomingMessage & { body?: unknown },
 
   if (await oauthHandler(req, res)) return;
 
+  // Ticketed direct upload: the HMAC ticket in the URL is the credential, so
+  // this route runs before bearer auth. Absent a signing secret it falls
+  // through to the 401 below.
+  const uploadSecret = process.env.SIGNING_SECRET;
+  if (uploadSecret && (await handleUploadRequest(req, res, { signingSecret: uploadSecret }))) return;
+
+  const proto = (req.headers["x-forwarded-proto"] as string | undefined)?.split(",")[0]?.trim() || "http";
+  const host = (req.headers["x-forwarded-host"] as string | undefined) || req.headers.host || "localhost";
+  const baseUrl = `${proto}://${host}`;
+
   if (!authorized(req)) {
-    const proto = (req.headers["x-forwarded-proto"] as string | undefined)?.split(",")[0]?.trim() || "http";
-    const host = (req.headers["x-forwarded-host"] as string | undefined) || req.headers.host || "localhost";
     res.setHeader(
       "WWW-Authenticate",
-      `Bearer realm="acculynx-mcp", resource_metadata="${proto}://${host}/.well-known/oauth-protected-resource"`,
+      `Bearer realm="acculynx-mcp", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`,
     );
     return sendJson(res, 401, {
       jsonrpc: "2.0",
@@ -79,7 +88,7 @@ export default async function handler(req: IncomingMessage & { body?: unknown },
   }
 
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-  const server = buildServer();
+  const server = buildServer({ baseUrl });
 
   res.on("close", () => {
     void transport.close();

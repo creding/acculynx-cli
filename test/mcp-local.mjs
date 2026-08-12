@@ -10,6 +10,7 @@ import handler from "../api/mcp.js";
 
 const TOKEN = "test-token-abc123";
 process.env.MCP_AUTH_TOKEN = TOKEN;
+process.env.SIGNING_SECRET = process.env.SIGNING_SECRET || "local-test-signing-secret";
 process.env.ACCULYNX_API_KEY = process.env.ACCULYNX_API_KEY || "dummy-key-for-local-test";
 
 const server = http.createServer((req, res) => {
@@ -88,8 +89,9 @@ function check(name, pass, detail) {
   const r = await rpc("tools/list", {});
   const names = (r.payload?.result?.tools ?? []).map((t) => t.name).sort();
   check(
-    "exposes exactly 3 meta-tools",
-    names.length === 3 && names.join(",") === "acculynx_describe,acculynx_run,acculynx_search",
+    "exposes the 3 meta-tools plus request_upload",
+    names.length === 4 &&
+      names.join(",") === "acculynx_describe,acculynx_request_upload,acculynx_run,acculynx_search",
     names.join(","),
   );
 }
@@ -186,6 +188,45 @@ function check(name, pass, detail) {
     reachedNetwork,
     isError ? msg.slice(0, 120) : `ping ok — ${JSON.stringify(parsed).slice(0, 80)}`,
   );
+}
+
+// 14. direct upload: mint a ticket, PUT raw bytes, verify ticket semantics.
+// With a dummy API key the forward is rejected by AccuLynx (502); with a real
+// key it lands (200 receipt). Both prove the route end to end.
+{
+  const r = await rpc("tools/call", {
+    name: "acculynx_request_upload",
+    arguments: {
+      jobId: "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      documentFolderId: "b1a85f64-5717-4562-b3fc-2c963f66afa6",
+      fileName: "smoke-probe.pdf",
+    },
+  });
+  const minted = JSON.parse(r.payload?.result?.content?.[0]?.text ?? "{}");
+  const urlOk = typeof minted.uploadUrl === "string" && minted.uploadUrl.includes("/api/uploads/");
+  check("request_upload mints a PUT url", urlOk, minted.uploadUrl?.slice(0, 60));
+
+  if (urlOk) {
+    const bytes = Buffer.from("%PDF-1.4\nsmoke probe not a real document\n");
+    const putRes = await fetch(minted.uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: bytes,
+    });
+    const receipt = await putRes.json().catch(() => ({}));
+    check(
+      "PUT reaches the forwarder (receipt or AccuLynx rejection)",
+      putRes.status === 200 || putRes.status === 502,
+      `status ${putRes.status} ${JSON.stringify(receipt).slice(0, 80)}`,
+    );
+
+    const forgedRes = await fetch(minted.uploadUrl.slice(0, -6) + "tamper", {
+      method: "PUT",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: bytes,
+    });
+    check("tampered ticket rejected with 403", forgedRes.status === 403, `status ${forgedRes.status}`);
+  }
 }
 
 server.close();

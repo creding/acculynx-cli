@@ -85,9 +85,46 @@ errors fail it.
 
 ## Uploading files
 
-The MCP server has no access to the caller's filesystem, so file-bearing
-inputs (`documents add`, `photos upload`, the two measurements uploads) accept
-the file content itself in any of these string forms:
+### Direct upload (preferred)
+
+File bytes should not travel through model context — base64 costs ~1 token per
+character in each direction. `acculynx_request_upload` (registered when
+`SIGNING_SECRET` is set) mints a single-use PUT URL bound to jobId +
+documentFolderId + fileName via an HMAC-signed ticket (10-minute expiry,
+4 MB cap — under Vercel's ~4.5 MB body limit). The caller PUTs the raw bytes:
+
+```bash
+curl -sS -X PUT -H "Content-Type: application/octet-stream" --data-binary @file.pdf "<uploadUrl>"
+```
+
+`PUT /api/uploads/<ticket>` verifies the HMAC, enforces size, forwards the
+body to AccuLynx as the same multipart call as `documents add`, and returns a
+receipt `{ ok, fileName, jobId, documentFolderId, bytes, sha256,
+acculynxStatus, uploadedAt }` — the sha256 is the only integrity check
+available since AccuLynx has no read-back API. Receipts are also logged
+server-side for later duplicate identification by hash.
+
+Status semantics: **200** receipt · **403** invalid ticket · **410** expired ·
+**413** oversize · **409** ticket already used — *do not retry*, the first
+upload likely landed and cannot be deleted · **502** AccuLynx rejected the
+forward — the ticket is released, one retry is safe.
+
+The PUT is unauthenticated by design (a sandboxed caller holds no
+credentials); the signed ticket fixes every destination field at mint time so
+a leaked URL can only re-send bytes, never retarget them. Single-use is
+enforced per warm instance — the deployment persists nothing, so a replay
+against a cold instance inside the TTL is not blocked; the short TTL bounds
+that window.
+
+This exists because Cowork's sandbox can reach the connector's own host but
+not third-party storage (probed: `acculynx-cli.vercel.app` 200,
+`*.supabase.co` and `s3.amazonaws.com` 403 CONNECT denied), so the PUT is
+served from the host that is already allowlisted.
+
+### Inline content (fallback)
+
+File-bearing inputs (`documents add`, `photos upload`, the two measurements
+uploads) also accept the file content itself in any of these string forms:
 
 | Form | Example | Notes |
 | --- | --- | --- |
