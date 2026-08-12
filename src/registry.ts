@@ -50,6 +50,9 @@ import postJobMeasurementsUploadFiles from "./commands/acculynx_post_job_measure
 import getContacts from "./commands/acculynx_get_contacts.ts";
 import getContact from "./commands/acculynx_get_contact.ts";
 import createContact from "./commands/acculynx_create_contact.ts";
+import updateContact from "./commands/acculynx_update_contact.ts";
+import addContactEmailAddress from "./commands/acculynx_add_contact_email_address.ts";
+import addContactPhoneNumber from "./commands/acculynx_add_contact_phone_number.ts";
 import getContactTypes from "./commands/acculynx_get_contact_types.ts";
 import addContactLog from "./commands/acculynx_add_contact_log.ts";
 import getContactPhoneNumbers from "./commands/acculynx_get_contact_phone_numbers.ts";
@@ -184,6 +187,10 @@ export const REGISTRY: CommandEntry[] = [
   { group: "contacts", verb: "get", tool: "acculynx_get_contact", config: getContact, positional: "contactId" },
   { group: "contacts", verb: "create", tool: "acculynx_create_contact", config: createContact,
     hints: ["Create a job for this contact: acculynx jobs create --json '{\"contact\":{\"id\":\"<id>\"}}'"] },
+  { group: "contacts", verb: "update", tool: "acculynx_update_contact", config: updateContact, positional: "contactId",
+    hints: ["Add phone/email separately: acculynx contacts add-phone <contactId> / add-email <contactId>"] },
+  { group: "contacts", verb: "add-email", tool: "acculynx_add_contact_email_address", config: addContactEmailAddress, positional: "contactId" },
+  { group: "contacts", verb: "add-phone", tool: "acculynx_add_contact_phone_number", config: addContactPhoneNumber, positional: "contactId" },
   { group: "contacts", verb: "types", tool: "acculynx_get_contact_types", config: getContactTypes },
   { group: "contacts", verb: "add-log", tool: "acculynx_add_contact_log", config: addContactLog, positional: "contactId" },
   { group: "contacts", verb: "phone-numbers", tool: "acculynx_get_contact_phone_numbers", config: getContactPhoneNumbers, positional: "contactId" },
