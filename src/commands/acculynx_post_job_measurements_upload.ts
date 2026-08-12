@@ -9,7 +9,10 @@ export default defineTool({
   inputSchema: z.object({
     jobId: z.string().describe("The job's unique identifier"),
     body: z.object({
-    measurementsFile: z.string().describe("Local file name or path in the sandbox containing manual measurements (XML or JSON format)")
+    measurementsFile: z.string().describe(
+      "Manual measurements file (XML or JSON format): a local path, an https URL (downloaded server-side, 25 MB max), " +
+        "a data: URI (add ;name=<filename> to set the stored filename), or a bare base64 string",
+    )
   }),
   }),
   async execute({ body, jobId }, ctx) {

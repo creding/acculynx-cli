@@ -18,7 +18,9 @@ export default defineTool({
     file: z
       .string()
       .describe(
-        "File to upload: a local path (e.g. 'photo.jpg'), an https URL (downloaded server-side, 25 MB max), or a data: URI with base64 content",
+        "File to upload: a local path (e.g. 'photo.jpg'), an https URL (handed to AccuLynx as fileUri), " +
+          "a data: URI (add ;name=<filename> before ;base64 to set the stored filename), or a bare base64 string " +
+          "(file type sniffed from content; 25 MB max)",
       )
       .optional(),
     description: z.string().describe("A brief description related to the file that is being uploaded.").optional(),

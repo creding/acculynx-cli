@@ -41,6 +41,92 @@ test("malformed data URI throws a usable error", async () => {
   await assert.rejects(() => resolveSandboxFile("data:image/png;base64,!!!not-base64!!!", undefined), /base64|data URI/i);
 });
 
+// ---- raw base64 inputs (no data: prefix) ----
+// Padded past the 256-char detection floor; sniffing only reads the header,
+// so trailing filler bytes don't matter.
+const BIG_PNG = Buffer.concat([PNG_BYTES, Buffer.alloc(300, 7)]);
+const BIG_PDF = Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.alloc(300, 7)]);
+const BIG_UNKNOWN = Buffer.alloc(320, 0x42);
+
+test("raw base64 PNG decodes to a temp file with a sniffed .png extension", async () => {
+  const res = await resolveSandboxFile(BIG_PNG.toString("base64"), undefined);
+  assert.ok(res, "raw base64 should resolve, not fall through as a path");
+  assert.deepEqual(await fs.readFile(res.path), BIG_PNG);
+  assert.equal(path.extname(res.path), ".png");
+  await res.cleanup();
+  await assert.rejects(fs.access(res.path));
+});
+
+test("raw base64 PDF gets a sniffed .pdf extension", async () => {
+  const res = await resolveSandboxFile(BIG_PDF.toString("base64"), undefined);
+  assert.ok(res);
+  assert.equal(path.extname(res.path), ".pdf");
+  assert.deepEqual(await fs.readFile(res.path), BIG_PDF);
+  await res.cleanup();
+});
+
+test("raw base64 with unrecognizable content still resolves, as .bin", async () => {
+  const res = await resolveSandboxFile(BIG_UNKNOWN.toString("base64"), undefined);
+  assert.ok(res);
+  assert.equal(path.extname(res.path), ".bin");
+  await res.cleanup();
+});
+
+test("raw base64 tolerates whitespace/newlines in the payload", async () => {
+  const wrapped = BIG_PNG.toString("base64").replace(/(.{76})/g, "$1\n");
+  const res = await resolveSandboxFile(wrapped, undefined);
+  assert.ok(res);
+  assert.deepEqual(await fs.readFile(res.path), BIG_PNG);
+  await res.cleanup();
+});
+
+test("short base64-charset strings still fall through as paths (null)", async () => {
+  assert.equal(await resolveSandboxFile("hello", undefined), null);
+  assert.equal(await resolveSandboxFile("aGVsbG8=", undefined), null); // "hello" encoded, but tiny
+});
+
+test("oversized raw base64 is rejected", async () => {
+  // 26 MB of zeros — over the 25 MB cap once decoded.
+  const huge = Buffer.alloc(26 * 1024 * 1024).toString("base64");
+  await assert.rejects(() => resolveSandboxFile(huge, undefined), /too large/i);
+});
+
+// ---- data: URI name= parameter (RFC 2397 parameters) ----
+
+test("data URI with ;name= keeps that filename", async () => {
+  const uri = `data:application/pdf;name=contract.pdf;base64,${BIG_PDF.toString("base64")}`;
+  const res = await resolveSandboxFile(uri, undefined);
+  assert.ok(res);
+  assert.equal(path.basename(res.path), "contract.pdf");
+  assert.deepEqual(await fs.readFile(res.path), BIG_PDF);
+  await res.cleanup();
+});
+
+test("data URI ;name= is URI-decoded and sanitized to a basename", async () => {
+  const uri = `data:image/png;name=..%2F..%2Froof%20photo.png;base64,${PNG_BYTES.toString("base64")}`;
+  const res = await resolveSandboxFile(uri, undefined);
+  assert.ok(res);
+  assert.equal(path.basename(res.path), "roof photo.png");
+  assert.ok(!res.path.includes(".."));
+  await res.cleanup();
+});
+
+test("non-base64 data URI with a name parameter still decodes", async () => {
+  const res = await resolveSandboxFile("data:text/plain;name=note.txt,hello%20world", undefined);
+  assert.ok(res);
+  assert.equal(path.basename(res.path), "note.txt");
+  assert.equal(await fs.readFile(res.path, "utf8"), "hello world");
+  await res.cleanup();
+});
+
+test("unnamed data URI with unknown mime falls back to magic-byte sniffing", async () => {
+  const uri = `data:application/octet-stream;base64,${BIG_PNG.toString("base64")}`;
+  const res = await resolveSandboxFile(uri, undefined);
+  assert.ok(res);
+  assert.equal(path.extname(res.path), ".png");
+  await res.cleanup();
+});
+
 // ---- URL downloads (local http server; insecure allowed only via env override) ----
 
 let base = "";

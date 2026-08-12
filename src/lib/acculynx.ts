@@ -209,10 +209,54 @@ async function downloadRemoteFile(url: URL): Promise<{ path: string; cleanup: ()
   return writeTempFile(data, filename);
 }
 
+/** Best-effort extension from magic bytes, for content that arrives nameless. */
+function sniffExtension(data: Buffer): string {
+  if (data.length < 4) return ".bin";
+  if (data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4e && data[3] === 0x47) return ".png";
+  if (data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) return ".jpg";
+  if (data[0] === 0x50 && data[1] === 0x4b && data[2] === 0x03 && data[3] === 0x04) return ".zip";
+  const head = data.subarray(0, 4).toString("latin1");
+  if (head === "GIF8") return ".gif";
+  if (head === "%PDF") return ".pdf";
+  if (head === "RIFF" && data.subarray(8, 12).toString("latin1") === "WEBP") return ".webp";
+  if (data.length >= 12 && data.subarray(4, 8).toString("latin1") === "ftyp") {
+    const brand = data.subarray(8, 12).toString("latin1");
+    if (brand.startsWith("qt")) return ".mov";
+    if (/^(hei|hev|mif1|msf1)/.test(brand)) return ".heic";
+    return ".mp4";
+  }
+  return ".bin";
+}
+
+const RAW_BASE64_MIN_CHARS = 256;
+
+/**
+ * Detect a bare base64 payload (no data: prefix) and decode it. Returns null
+ * for anything that could plausibly be a path instead: the 256-char floor plus
+ * the strict charset check make collision with a real filename practically
+ * impossible. Throws (rather than falling through) when the payload is
+ * recognizably base64 but too large.
+ */
+function decodeRawBase64(input: string): Buffer | null {
+  if (input.length < RAW_BASE64_MIN_CHARS) return null;
+  const compact = input.replace(/\s+/g, "");
+  if (compact.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(compact)) return null;
+  if ((compact.length / 4) * 3 > MAX_REMOTE_FILE_BYTES + 2) {
+    throw new Error(`Inline file is too large (~${Math.floor((compact.length / 4) * 3)} bytes; limit ${MAX_REMOTE_FILE_BYTES}).`);
+  }
+  const data = Buffer.from(compact, "base64");
+  return data.length > 0 ? data : null;
+}
+
 function decodeDataUri(uri: string): { data: Buffer; filename: string } {
-  const match = /^data:([^;,]*)(;base64)?,(.*)$/s.exec(uri);
+  const match = /^data:([^,]*),(.*)$/s.exec(uri);
   if (!match) throw new Error("Malformed data URI.");
-  const [, mime, isBase64, payload] = match;
+  const [, mediatype, payload] = match;
+  const params = mediatype.split(";").map((p) => p.trim());
+  const mime = params.shift() ?? "";
+  const isBase64 = params.some((p) => p.toLowerCase() === "base64");
+  const nameParam = params.find((p) => p.toLowerCase().startsWith("name="));
+
   let data: Buffer;
   if (isBase64) {
     if (!/^[A-Za-z0-9+/=\s]*$/.test(payload) || payload.trim().length === 0) {
@@ -226,7 +270,23 @@ function decodeDataUri(uri: string): { data: Buffer; filename: string } {
   if (data.length > MAX_REMOTE_FILE_BYTES) {
     throw new Error(`Inline file is too large (${data.length} bytes; limit ${MAX_REMOTE_FILE_BYTES}).`);
   }
-  return { data, filename: `upload${MIME_EXTENSIONS[mime] ?? ".bin"}` };
+
+  // ;name=<filename> (the convention @readme/api-core also uses) wins;
+  // URI-decode it and strip any directory components so it stays in the temp dir.
+  let filename = "";
+  if (nameParam) {
+    const raw = nameParam.slice("name=".length);
+    let decoded = raw;
+    try {
+      decoded = decodeURIComponent(raw);
+    } catch {
+      // keep the raw value when it is not valid percent-encoding
+    }
+    const base = path.basename(decoded.trim());
+    if (base && base !== "." && base !== "..") filename = base;
+  }
+  if (!filename) filename = `upload${MIME_EXTENSIONS[mime] ?? sniffExtension(data)}`;
+  return { data, filename };
 }
 
 /**
@@ -251,9 +311,11 @@ export function preferFileUriForUrls<T extends { file?: string; fileUri?: string
 /**
  * Resolve a file input to a local path the SDK can upload.
  * Accepts: an existing local path (never deleted by cleanup), an https URL
- * (downloaded to a temp dir; cleanup removes it), or a data: URI (decoded to
- * a temp dir). URL and data inputs are what make file uploads work through
- * the hosted MCP server, which has no access to the caller's filesystem.
+ * (downloaded to a temp dir; cleanup removes it), a data: URI (decoded to a
+ * temp dir; use ;name=<filename> to control the stored name), or a bare
+ * base64 string (decoded to a temp dir; filename sniffed from magic bytes).
+ * URL and base64 inputs are what make file uploads work through the hosted
+ * MCP server, which has no access to the caller's filesystem.
  */
 export async function resolveSandboxFile(
   fileInput: string | undefined,
@@ -267,6 +329,13 @@ export async function resolveSandboxFile(
   if (fileInput.startsWith("data:")) {
     const { data, filename } = decodeDataUri(fileInput);
     return writeTempFile(data, filename);
+  }
+
+  // Bare base64 (no data: prefix) — checked before the filesystem so a
+  // multi-megabyte payload is never handed to fs.access as a "path".
+  const rawData = decodeRawBase64(fileInput);
+  if (rawData) {
+    return writeTempFile(rawData, `upload${sniffExtension(rawData)}`);
   }
 
   const resolved = path.resolve(process.cwd(), fileInput);

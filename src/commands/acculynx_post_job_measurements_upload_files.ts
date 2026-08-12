@@ -9,9 +9,16 @@ export default defineTool({
   inputSchema: z.object({
     jobId: z.string().describe("The job's unique identifier"),
     body: z.object({
-    measurementsFile: z.string().describe("Local file name or path in the sandbox containing measurements (XML or JSON format)").optional(),
-    reportPdf: z.string().describe("Local PDF file name or path in the sandbox for the order report").optional(),
-    miscPdfs: z.array(z.string()).describe("A list of local PDF file names or paths in the sandbox to attach").optional(),
+    measurementsFile: z.string().describe(
+      "Measurements file (XML or JSON format): a local path, an https URL (downloaded server-side, 25 MB max), " +
+        "a data: URI (add ;name=<filename> to set the stored filename), or a bare base64 string",
+    ).optional(),
+    reportPdf: z.string().describe(
+      "Order report PDF: a local path, an https URL, a data: URI (;name=<filename> sets the stored name), or a bare base64 string",
+    ).optional(),
+    miscPdfs: z.array(z.string()).describe(
+      "PDFs to attach; each entry accepts a local path, an https URL, a data: URI, or a bare base64 string",
+    ).optional(),
     latitude: z.number().describe("Latitude of the map location for the new measurement order, value between -90 and 90."),
     longitude: z.number().describe("Longitude of the map location for the new measurement order, value between -180 and 180."),
     providerMeasurementOrderId: z.string().describe("A text with the provider order identifier, special characters not allowed."),

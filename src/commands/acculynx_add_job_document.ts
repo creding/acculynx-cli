@@ -12,7 +12,9 @@ export default defineTool({
     file: z
       .string()
       .describe(
-        "File to upload: a local path (e.g. 'proposal.pdf'), an https URL (downloaded server-side, 25 MB max), or a data: URI with base64 content",
+        "File to upload: a local path (e.g. 'proposal.pdf'), an https URL (downloaded server-side, 25 MB max), " +
+          "a data: URI (add ;name=<filename> before ;base64 to set the stored filename), or a bare base64 string " +
+          "(file type sniffed from content)",
       ),
     description: z.string().optional().describe("Brief file context description"),
   }),

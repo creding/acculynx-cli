@@ -108132,10 +108132,42 @@ async function downloadRemoteFile(url2) {
   const filename = urlName.includes(".") ? urlName : `download${mimeExt || ".bin"}`;
   return writeTempFile(data, filename);
 }
+function sniffExtension(data) {
+  if (data.length < 4) return ".bin";
+  if (data[0] === 137 && data[1] === 80 && data[2] === 78 && data[3] === 71) return ".png";
+  if (data[0] === 255 && data[1] === 216 && data[2] === 255) return ".jpg";
+  if (data[0] === 80 && data[1] === 75 && data[2] === 3 && data[3] === 4) return ".zip";
+  const head = data.subarray(0, 4).toString("latin1");
+  if (head === "GIF8") return ".gif";
+  if (head === "%PDF") return ".pdf";
+  if (head === "RIFF" && data.subarray(8, 12).toString("latin1") === "WEBP") return ".webp";
+  if (data.length >= 12 && data.subarray(4, 8).toString("latin1") === "ftyp") {
+    const brand = data.subarray(8, 12).toString("latin1");
+    if (brand.startsWith("qt")) return ".mov";
+    if (/^(hei|hev|mif1|msf1)/.test(brand)) return ".heic";
+    return ".mp4";
+  }
+  return ".bin";
+}
+var RAW_BASE64_MIN_CHARS = 256;
+function decodeRawBase64(input) {
+  if (input.length < RAW_BASE64_MIN_CHARS) return null;
+  const compact = input.replace(/\s+/g, "");
+  if (compact.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(compact)) return null;
+  if (compact.length / 4 * 3 > MAX_REMOTE_FILE_BYTES + 2) {
+    throw new Error(`Inline file is too large (~${Math.floor(compact.length / 4 * 3)} bytes; limit ${MAX_REMOTE_FILE_BYTES}).`);
+  }
+  const data = Buffer.from(compact, "base64");
+  return data.length > 0 ? data : null;
+}
 function decodeDataUri(uri) {
-  const match2 = /^data:([^;,]*)(;base64)?,(.*)$/s.exec(uri);
+  const match2 = /^data:([^,]*),(.*)$/s.exec(uri);
   if (!match2) throw new Error("Malformed data URI.");
-  const [, mime, isBase64, payload] = match2;
+  const [, mediatype, payload] = match2;
+  const params = mediatype.split(";").map((p) => p.trim());
+  const mime = params.shift() ?? "";
+  const isBase64 = params.some((p) => p.toLowerCase() === "base64");
+  const nameParam = params.find((p) => p.toLowerCase().startsWith("name="));
   let data;
   if (isBase64) {
     if (!/^[A-Za-z0-9+/=\s]*$/.test(payload) || payload.trim().length === 0) {
@@ -108149,7 +108181,19 @@ function decodeDataUri(uri) {
   if (data.length > MAX_REMOTE_FILE_BYTES) {
     throw new Error(`Inline file is too large (${data.length} bytes; limit ${MAX_REMOTE_FILE_BYTES}).`);
   }
-  return { data, filename: `upload${MIME_EXTENSIONS[mime] ?? ".bin"}` };
+  let filename = "";
+  if (nameParam) {
+    const raw = nameParam.slice("name=".length);
+    let decoded = raw;
+    try {
+      decoded = decodeURIComponent(raw);
+    } catch {
+    }
+    const base = import_path.default.basename(decoded.trim());
+    if (base && base !== "." && base !== "..") filename = base;
+  }
+  if (!filename) filename = `upload${MIME_EXTENSIONS[mime] ?? sniffExtension(data)}`;
+  return { data, filename };
 }
 function preferFileUriForUrls(body) {
   if (body.file && /^https?:\/\//i.test(body.file) && !body.fileUri) {
@@ -108166,6 +108210,10 @@ async function resolveSandboxFile(fileInput, _ctx) {
   if (fileInput.startsWith("data:")) {
     const { data, filename } = decodeDataUri(fileInput);
     return writeTempFile(data, filename);
+  }
+  const rawData = decodeRawBase64(fileInput);
+  if (rawData) {
+    return writeTempFile(rawData, `upload${sniffExtension(rawData)}`);
   }
   const resolved = import_path.default.resolve(process.cwd(), fileInput);
   try {
@@ -109093,7 +109141,9 @@ var acculynx_post_job_measurements_upload_default = defineTool({
   inputSchema: external_exports.object({
     jobId: external_exports.string().describe("The job's unique identifier"),
     body: external_exports.object({
-      measurementsFile: external_exports.string().describe("Local file name or path in the sandbox containing manual measurements (XML or JSON format)")
+      measurementsFile: external_exports.string().describe(
+        "Manual measurements file (XML or JSON format): a local path, an https URL (downloaded server-side, 25 MB max), a data: URI (add ;name=<filename> to set the stored filename), or a bare base64 string"
+      )
     })
   }),
   async execute({ body, jobId }, ctx) {
@@ -109126,9 +109176,15 @@ var acculynx_post_job_measurements_upload_files_default = defineTool({
   inputSchema: external_exports.object({
     jobId: external_exports.string().describe("The job's unique identifier"),
     body: external_exports.object({
-      measurementsFile: external_exports.string().describe("Local file name or path in the sandbox containing measurements (XML or JSON format)").optional(),
-      reportPdf: external_exports.string().describe("Local PDF file name or path in the sandbox for the order report").optional(),
-      miscPdfs: external_exports.array(external_exports.string()).describe("A list of local PDF file names or paths in the sandbox to attach").optional(),
+      measurementsFile: external_exports.string().describe(
+        "Measurements file (XML or JSON format): a local path, an https URL (downloaded server-side, 25 MB max), a data: URI (add ;name=<filename> to set the stored filename), or a bare base64 string"
+      ).optional(),
+      reportPdf: external_exports.string().describe(
+        "Order report PDF: a local path, an https URL, a data: URI (;name=<filename> sets the stored name), or a bare base64 string"
+      ).optional(),
+      miscPdfs: external_exports.array(external_exports.string()).describe(
+        "PDFs to attach; each entry accepts a local path, an https URL, a data: URI, or a bare base64 string"
+      ).optional(),
       latitude: external_exports.number().describe("Latitude of the map location for the new measurement order, value between -90 and 90."),
       longitude: external_exports.number().describe("Longitude of the map location for the new measurement order, value between -180 and 180."),
       providerMeasurementOrderId: external_exports.string().describe("A text with the provider order identifier, special characters not allowed."),
@@ -109909,7 +109965,7 @@ var acculynx_add_job_document_default = defineTool({
     jobId: external_exports.string().guid().describe("Target Job UUID where file will be uploaded"),
     documentFolderId: external_exports.string().guid().describe("Target Folder UUID retrieved from acculynx_get_company_document_folders"),
     file: external_exports.string().describe(
-      "File to upload: a local path (e.g. 'proposal.pdf'), an https URL (downloaded server-side, 25 MB max), or a data: URI with base64 content"
+      "File to upload: a local path (e.g. 'proposal.pdf'), an https URL (downloaded server-side, 25 MB max), a data: URI (add ;name=<filename> before ;base64 to set the stored filename), or a bare base64 string (file type sniffed from content)"
     ),
     description: external_exports.string().optional().describe("Brief file context description")
   }),
@@ -109956,7 +110012,7 @@ var acculynx_post_upload_photo_or_video_default = defineTool({
     jobId: external_exports.string().describe("The job's unique identifier"),
     body: external_exports.object({
       file: external_exports.string().describe(
-        "File to upload: a local path (e.g. 'photo.jpg'), an https URL (downloaded server-side, 25 MB max), or a data: URI with base64 content"
+        "File to upload: a local path (e.g. 'photo.jpg'), an https URL (handed to AccuLynx as fileUri), a data: URI (add ;name=<filename> before ;base64 to set the stored filename), or a bare base64 string (file type sniffed from content; 25 MB max)"
       ).optional(),
       description: external_exports.string().describe("A brief description related to the file that is being uploaded.").optional(),
       tags: external_exports.string().describe("A comma-separated list of 'GUID' to be applier to the photo or video. The tags should exist within the location.").optional(),
