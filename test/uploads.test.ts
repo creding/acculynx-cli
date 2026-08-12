@@ -60,6 +60,32 @@ test("two mints produce distinct nonces", () => {
   assert.notEqual(a, b);
 });
 
+// ---- "documents request-upload" registry command ----
+
+test("documents request-upload mints a URL bound to its inputs", async (t) => {
+  process.env.SIGNING_SECRET = KEY;
+  t.after(() => delete process.env.SIGNING_SECRET);
+  const { default: requestUpload } = await import("../src/commands/acculynx_request_document_upload.ts");
+  const payload = (await requestUpload.call(null, { ...FIELDS }, { baseUrl: "https://example.test" })) as Record<
+    string,
+    unknown
+  >;
+  assert.match(String(payload.uploadUrl), /^https:\/\/example\.test\/api\/uploads\//);
+  assert.equal(payload.method, "PUT");
+  assert.equal(payload.maxBytes, UPLOAD_MAX_BYTES);
+  assert.match(String(payload.curlExample), /--data-binary/);
+  const ticket = decodeURIComponent(String(payload.uploadUrl).split("/api/uploads/")[1]);
+  const v = verifyUploadTicket(ticket, KEY);
+  assert.equal(v.ok && v.fields.fileName, FIELDS.fileName);
+  assert.equal(v.ok && v.fields.jobId, FIELDS.jobId);
+});
+
+test("documents request-upload without SIGNING_SECRET explains itself", async () => {
+  delete process.env.SIGNING_SECRET;
+  const { default: requestUpload } = await import("../src/commands/acculynx_request_document_upload.ts");
+  await assert.rejects(() => requestUpload.call(null, { ...FIELDS }, {}), /hosted MCP server|SIGNING_SECRET/i);
+});
+
 // ---- PUT handler (fake forwarder; no AccuLynx network) ----
 
 const PDF = Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.alloc(200, 7)]);

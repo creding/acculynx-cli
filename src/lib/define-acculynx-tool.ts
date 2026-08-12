@@ -4,6 +4,8 @@ import type { Approval } from "./approval.ts";
 export interface CommandContext {
   /** Output path for report commands (-o/--output). */
   outputPath?: string;
+  /** Public origin of the serving MCP deployment (set by the HTTP entry). */
+  baseUrl?: string;
 }
 
 export interface CommandConfig<

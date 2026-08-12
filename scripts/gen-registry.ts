@@ -58,6 +58,7 @@ const MAP: Record<string, [string, string]> = {
   acculynx_get_contacts: ["contacts", "list"],
   acculynx_get_contact: ["contacts", "get"],
   acculynx_create_contact: ["contacts", "create"],
+  acculynx_request_document_upload: ["documents", "request-upload"],
   acculynx_update_contact: ["contacts", "update"],
   acculynx_add_contact_email_address: ["contacts", "add-email"],
   acculynx_add_contact_phone_number: ["contacts", "add-phone"],

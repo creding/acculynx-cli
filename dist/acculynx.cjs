@@ -110022,6 +110022,74 @@ var acculynx_add_job_document_default = defineTool({
   }
 });
 
+// src/mcp/uploads.ts
+var import_node_crypto2 = require("node:crypto");
+
+// src/mcp/oauth.ts
+var import_node_crypto = require("node:crypto");
+var ACCESS_TTL_S = 60 * 60;
+var REFRESH_TTL_S = 30 * 24 * 60 * 60;
+var CODE_TTL_S = 5 * 60;
+function mac3(data, key) {
+  return (0, import_node_crypto.createHmac)("sha256", key).update(data).digest();
+}
+function signBlob(payload, key) {
+  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  return body + "." + mac3(body, key).toString("base64url");
+}
+
+// src/mcp/uploads.ts
+var UPLOAD_TICKET_TTL_S = 600;
+var UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
+function mintUploadTicket(fields, key, opts = {}) {
+  return signBlob(
+    {
+      v: 1,
+      typ: "upl",
+      exp: Math.floor(Date.now() / 1e3) + (opts.ttlS ?? UPLOAD_TICKET_TTL_S),
+      n: (0, import_node_crypto2.randomBytes)(16).toString("base64url"),
+      ...fields
+    },
+    key
+  );
+}
+
+// src/commands/acculynx_request_document_upload.ts
+var acculynx_request_document_upload_default = defineTool({
+  description: "Mint a single-use, 10-minute direct-upload URL for a job document. PUT the raw file bytes to the returned uploadUrl (curl --data-binary @file) \u2014 no base64, no file content in tool calls. The PUT response is a receipt with sha256 and byte count. On 409 (ticket already used) do NOT retry: the first upload likely landed and AccuLynx has no delete API. On 502 one retry is safe. Hosted MCP server only. This mutates AccuLynx data (via the subsequent PUT) and requires explicit human approval before it executes.",
+  approval: always(),
+  inputSchema: external_exports.object({
+    jobId: external_exports.string().guid().describe("Target Job UUID"),
+    documentFolderId: external_exports.string().guid().describe("Target folder UUID from: acculynx documents folders"),
+    fileName: external_exports.string().min(1).describe('Filename to store in AccuLynx, e.g. "McPherson Supplement 1.pdf"'),
+    contentType: external_exports.string().optional().describe("MIME type of the file (informational)"),
+    description: external_exports.string().optional().describe("Brief file context description")
+  }),
+  async execute({ jobId, documentFolderId, fileName, contentType, description }, ctx) {
+    const secret = process.env.SIGNING_SECRET;
+    if (!secret) {
+      throw new Error(
+        'documents request-upload mints signed URLs and needs SIGNING_SECRET, which only the hosted MCP server has. Locally, pass a file path straight to "documents add" instead.'
+      );
+    }
+    const baseUrl = ctx?.baseUrl || process.env.ACCULYNX_MCP_BASE_URL || "";
+    const ticket = mintUploadTicket({ jobId, documentFolderId, fileName, contentType, description }, secret);
+    const uploadUrl = `${baseUrl}/api/uploads/${encodeURIComponent(ticket)}`;
+    const data = {
+      uploadUrl,
+      method: "PUT",
+      expiresAt: new Date(Date.now() + UPLOAD_TICKET_TTL_S * 1e3).toISOString(),
+      maxBytes: UPLOAD_MAX_BYTES,
+      curlExample: `curl -sS -X PUT -H "Content-Type: application/octet-stream" --data-binary @"${fileName}" "${uploadUrl}"`,
+      _note: "Single-use. 200 \u2192 receipt with sha256 (verify against your local file). 409 \u2192 already used, do not retry. 502 \u2192 AccuLynx rejected it, one retry is safe. 410 \u2192 expired, request a new URL."
+    };
+    return { text: JSON.stringify(data, null, 2), data };
+  },
+  toModelOutput(output) {
+    return { type: "text", value: output.text };
+  }
+});
+
 // src/commands/acculynx_post_upload_photo_or_video.ts
 var acculynx_post_upload_photo_or_video_default = defineTool({
   description: "Upload a photo or video to a Job This mutates AccuLynx data and requires explicit human approval before it executes.",
@@ -111388,6 +111456,13 @@ var REGISTRY = [
     tool: "acculynx_add_job_document",
     config: acculynx_add_job_document_default,
     hints: ["Folder UUIDs come from: acculynx documents folders"]
+  },
+  {
+    group: "documents",
+    verb: "request-upload",
+    tool: "acculynx_request_document_upload",
+    config: acculynx_request_document_upload_default,
+    hints: ["Preferred over inline file content for MCP callers: PUT the raw bytes to the returned uploadUrl (curl --data-binary)", "Folder UUIDs come from: acculynx documents folders"]
   },
   { group: "media", verb: "upload", tool: "acculynx_post_upload_photo_or_video", config: acculynx_post_upload_photo_or_video_default, positional: "jobId" },
   { group: "media", verb: "tags", tool: "acculynx_get_photo_video_tags", config: acculynx_get_photo_video_tags_default },

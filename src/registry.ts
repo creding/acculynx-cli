@@ -92,6 +92,7 @@ import getAppointments from "./commands/acculynx_get_appointments.ts";
 import getAppointment from "./commands/acculynx_get_appointment.ts";
 import getCompanyDocumentFolders from "./commands/acculynx_get_company_document_folders.ts";
 import addJobDocument from "./commands/acculynx_add_job_document.ts";
+import requestDocumentUpload from "./commands/acculynx_request_document_upload.ts";
 import postUploadPhotoOrVideo from "./commands/acculynx_post_upload_photo_or_video.ts";
 import getPhotoVideoTags from "./commands/acculynx_get_photo_video_tags.ts";
 import getUsers from "./commands/acculynx_get_users.ts";
@@ -235,6 +236,8 @@ export const REGISTRY: CommandEntry[] = [
   { group: "documents", verb: "folders", tool: "acculynx_get_company_document_folders", config: getCompanyDocumentFolders },
   { group: "documents", verb: "add", tool: "acculynx_add_job_document", config: addJobDocument,
     hints: ["Folder UUIDs come from: acculynx documents folders"] },
+  { group: "documents", verb: "request-upload", tool: "acculynx_request_document_upload", config: requestDocumentUpload,
+    hints: ["Preferred over inline file content for MCP callers: PUT the raw bytes to the returned uploadUrl (curl --data-binary)", "Folder UUIDs come from: acculynx documents folders"] },
   { group: "media", verb: "upload", tool: "acculynx_post_upload_photo_or_video", config: postUploadPhotoOrVideo, positional: "jobId" },
   { group: "media", verb: "tags", tool: "acculynx_get_photo_video_tags", config: getPhotoVideoTags },
   { group: "users", verb: "list", tool: "acculynx_get_users", config: getUsers,

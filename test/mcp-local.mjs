@@ -190,7 +190,27 @@ function check(name, pass, detail) {
   );
 }
 
-// 14. direct upload: mint a ticket, PUT raw bytes, verify ticket semantics.
+// 14. the registry command form mints the same ticket through acculynx_run
+{
+  const r = await rpc("tools/call", {
+    name: "acculynx_run",
+    arguments: {
+      command: "documents request-upload",
+      input: {
+        jobId: "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        documentFolderId: "b1a85f64-5717-4562-b3fc-2c963f66afa6",
+        fileName: "smoke-probe.pdf",
+      },
+    },
+  });
+  const parsed = JSON.parse(r.payload?.result?.content?.[0]?.text ?? "{}");
+  check(
+    "documents request-upload runs as a registry command",
+    typeof parsed.uploadUrl === "string" && parsed.uploadUrl.includes("/api/uploads/"),
+    parsed.uploadUrl?.slice(0, 60) ?? JSON.stringify(parsed).slice(0, 120),
+  );
+}
+// 15. direct upload: mint a ticket, PUT raw bytes, verify ticket semantics.
 // With a dummy API key the forward is rejected by AccuLynx (502); with a real
 // key it lands (200 receipt). Both prove the route end to end.
 {

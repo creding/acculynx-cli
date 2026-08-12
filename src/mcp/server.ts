@@ -81,8 +81,9 @@ Groups: ${GROUP_ORDER.join(", ")}.
 
 This server has no access to your filesystem — a local path in a file input cannot work here.
 
-**Preferred: direct upload (zero bytes through context).** Call \`acculynx_request_upload\`
-with jobId, documentFolderId, and fileName; it returns a single-use PUT URL (10-minute expiry,
+**Preferred: direct upload (zero bytes through context).** Run the command
+\`documents request-upload\` (also exposed as the \`acculynx_request_upload\` tool) with jobId,
+documentFolderId, and fileName; it returns a single-use PUT URL (10-minute expiry,
 ${UPLOAD_MAX_BYTES} bytes max). Send the raw file from your shell:
 
     curl -sS -X PUT -H "Content-Type: application/octet-stream" --data-binary @file.pdf "<uploadUrl>"
@@ -115,7 +116,7 @@ provides no API to list, fetch, or delete a job's documents, so there is no id t
 no way to confirm or undo an upload here. Verify in the AccuLynx UI, and do not blind-retry a
 timed-out upload (it may have landed).`;
 
-export function buildServer(opts: { baseUrl?: string } = {}): McpServer {
+export function buildServer(serverOpts: { baseUrl?: string } = {}): McpServer {
   const server = new McpServer(
     { name: "acculynx", version: MCP_SERVER_VERSION },
     { instructions: INSTRUCTIONS },
@@ -149,7 +150,7 @@ export function buildServer(opts: { baseUrl?: string } = {}): McpServer {
         try {
           const secret = process.env.SIGNING_SECRET!;
           const ticket = mintUploadTicket({ jobId, documentFolderId, fileName, contentType, description }, secret);
-          const uploadUrl = `${opts.baseUrl ?? ""}/api/uploads/${encodeURIComponent(ticket)}`;
+          const uploadUrl = `${serverOpts.baseUrl ?? ""}/api/uploads/${encodeURIComponent(ticket)}`;
           return ok({
             uploadUrl,
             method: "PUT",
@@ -268,7 +269,7 @@ export function buildServer(opts: { baseUrl?: string } = {}): McpServer {
 
         requireApiKey();
         const client = getAccuLynxClient();
-        const result = await entry.config.call(client, parsed, {});
+        const result = await entry.config.call(client, parsed, { baseUrl: serverOpts.baseUrl });
 
         const opts: GlobalOptions = {
           format: "json",
