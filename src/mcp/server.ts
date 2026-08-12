@@ -57,7 +57,7 @@ function toolError(error: unknown) {
   return err({ message: handleApiError(error) });
 }
 
-const INSTRUCTIONS = `${GUIDE}
+export const INSTRUCTIONS = `${GUIDE}
 
 ---
 
@@ -74,7 +74,25 @@ Wherever the primer says \`acculynx <group> <verb>\`, pass \`"<group> <verb>"\` 
 argument to \`acculynx_describe\` / \`acculynx_run\` and supply arguments as a JSON object in
 \`input\` (flags and --json fields alike — there is no flag syntax here).
 
-Groups: ${GROUP_ORDER.join(", ")}.`;
+Groups: ${GROUP_ORDER.join(", ")}.
+
+## Uploading files
+
+This server has no access to your filesystem — a local path in a file input cannot work here.
+File-bearing commands ("documents add", "photos upload", the measurements uploads) instead accept
+the file content itself, in any of these string forms:
+
+- **https URL** — fetched server-side (photo/video uploads hand the URL to AccuLynx directly).
+  Use this for anything over ~3 MB.
+- **data: URI** — \`data:application/pdf;name=contract.pdf;base64,<payload>\`. The \`;name=\`
+  parameter sets the filename stored in AccuLynx; include it whenever the filename matters
+  (documents especially).
+- **bare base64** — just the payload string, no prefix. The file type is sniffed from the
+  content (PNG/JPEG/GIF/WEBP/PDF/MP4/MOV/HEIC/ZIP).
+
+Inline forms are capped at 25 MB decoded, but the request body itself is limited to ~4.5 MB,
+so an inline upload tops out around a 3 MB file — send anything larger by https URL. If an
+upload is rejected for size, switch to a URL rather than retrying inline.`;
 
 export function buildServer(): McpServer {
   const server = new McpServer(
