@@ -90,9 +90,18 @@ the file content itself, in any of these string forms:
 - **bare base64** — just the payload string, no prefix. The file type is sniffed from the
   content (PNG/JPEG/GIF/WEBP/PDF/MP4/MOV/HEIC/ZIP).
 
+Pass \`fileName\` alongside the file input to control the name stored in AccuLynx
+(e.g. "McPherson Supplement 1.pdf") — recommended for base64 and URL inputs, which otherwise
+get a generated name.
+
 Inline forms are capped at 25 MB decoded, but the request body itself is limited to ~4.5 MB,
 so an inline upload tops out around a 3 MB file — send anything larger by https URL. If an
-upload is rejected for size, switch to a URL rather than retrying inline.`;
+upload is rejected for size, switch to a URL rather than retrying inline.
+
+Document ingest is asynchronous: "documents add" returns 202 Accepted with no body — AccuLynx
+provides no API to list, fetch, or delete a job's documents, so there is no id to return and
+no way to confirm or undo an upload here. Verify in the AccuLynx UI, and do not blind-retry a
+timed-out upload (it may have landed).`;
 
 export function buildServer(): McpServer {
   const server = new McpServer(

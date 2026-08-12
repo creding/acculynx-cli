@@ -13,6 +13,11 @@ test("instructions teach all remote file input forms", () => {
   assert.match(INSTRUCTIONS, /bare base64|raw base64/i);
 });
 
+test("instructions cover fileName and async 202 ingest", () => {
+  assert.match(INSTRUCTIONS, /fileName/, "must mention the explicit fileName parameter");
+  assert.match(INSTRUCTIONS, /202|asynchronous/i, "must warn that document ingest is async with no id returned");
+});
+
 test("instructions state the inline size ceiling and the URL fallback", () => {
   assert.match(INSTRUCTIONS, /4\.5\s?MB/i, "must mention the request-body cap");
   assert.match(INSTRUCTIONS, /3\s?MB/i, "must give the effective inline file ceiling");

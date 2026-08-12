@@ -108109,7 +108109,17 @@ async function writeTempFile(data, filename) {
   await import_promises2.default.writeFile(filePath, data);
   return { path: filePath, cleanup: () => import_promises2.default.rm(dir, { recursive: true, force: true }) };
 }
-async function downloadRemoteFile(url2) {
+function sanitizeName(raw) {
+  if (!raw) return "";
+  let decoded = raw;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+  }
+  const base = import_path.default.basename(decoded.trim());
+  return base && base !== "." && base !== ".." ? base : "";
+}
+async function downloadRemoteFile(url2, overrideName = "") {
   const insecureAllowed = !!process.env.ACCULYNX_ALLOW_INSECURE_FILE_URLS;
   if (url2.protocol !== "https:" && !insecureAllowed) {
     throw new Error(`Only https file URLs are supported (got ${url2.protocol}//).`);
@@ -108129,7 +108139,7 @@ async function downloadRemoteFile(url2) {
   }
   const urlName = import_path.default.basename(url2.pathname) || "";
   const mimeExt = MIME_EXTENSIONS[(res.headers.get("content-type") ?? "").split(";")[0].trim()] ?? "";
-  const filename = urlName.includes(".") ? urlName : `download${mimeExt || ".bin"}`;
+  const filename = overrideName || (urlName.includes(".") ? urlName : `download${mimeExt || ".bin"}`);
   return writeTempFile(data, filename);
 }
 function sniffExtension(data) {
@@ -108181,17 +108191,7 @@ function decodeDataUri(uri) {
   if (data.length > MAX_REMOTE_FILE_BYTES) {
     throw new Error(`Inline file is too large (${data.length} bytes; limit ${MAX_REMOTE_FILE_BYTES}).`);
   }
-  let filename = "";
-  if (nameParam) {
-    const raw = nameParam.slice("name=".length);
-    let decoded = raw;
-    try {
-      decoded = decodeURIComponent(raw);
-    } catch {
-    }
-    const base = import_path.default.basename(decoded.trim());
-    if (base && base !== "." && base !== "..") filename = base;
-  }
+  let filename = nameParam ? sanitizeName(nameParam.slice("name=".length)) : "";
   if (!filename) filename = `upload${MIME_EXTENSIONS[mime] ?? sniffExtension(data)}`;
   return { data, filename };
 }
@@ -108202,33 +108202,43 @@ function preferFileUriForUrls(body) {
   }
   return body;
 }
-async function resolveSandboxFile(fileInput, _ctx) {
+async function resolveSandboxFile(fileInput, _ctx, opts = {}) {
   if (!fileInput || typeof fileInput !== "string") return null;
+  const named = sanitizeName(opts.fileName);
   if (/^https?:\/\//i.test(fileInput)) {
-    return downloadRemoteFile(new URL(fileInput));
+    return downloadRemoteFile(new URL(fileInput), named);
   }
   if (fileInput.startsWith("data:")) {
     const { data, filename } = decodeDataUri(fileInput);
-    return writeTempFile(data, filename);
+    return writeTempFile(data, named || filename);
   }
   const rawData = decodeRawBase64(fileInput);
   if (rawData) {
-    return writeTempFile(rawData, `upload${sniffExtension(rawData)}`);
+    return writeTempFile(rawData, named || `upload${sniffExtension(rawData)}`);
   }
   const resolved = import_path.default.resolve(process.cwd(), fileInput);
   try {
     await import_promises2.default.access(resolved);
+    if (named && named !== import_path.default.basename(resolved)) {
+      return writeTempFile(await import_promises2.default.readFile(resolved), named);
+    }
     return { path: resolved, cleanup: async () => {
     } };
   } catch {
-    return null;
+    const display = fileInput.length > 120 ? `${fileInput.slice(0, 120)}\u2026` : fileInput;
+    throw new Error(
+      `File input "${display}" could not be resolved. Accepted forms: an existing local path (CLI only), an https URL, a data: URI (data:<mime>;name=<filename>;base64,<payload>), or a bare base64 string. The hosted MCP server cannot read paths from your machine or sandbox \u2014 send the file content itself as a URL or base64.`
+    );
   }
 }
 async function resolveSandboxFiles(input, ctx, isFileField = false) {
+  const cleanups = [];
   async function traverse2(val, isField) {
     if (typeof val === "string" && isField) {
       const fileRes = await resolveSandboxFile(val, ctx);
-      return fileRes ? fileRes.path : val;
+      if (!fileRes) return val;
+      cleanups.push(fileRes.cleanup);
+      return fileRes.path;
     }
     if (Array.isArray(val)) return Promise.all(val.map((item) => traverse2(item, isField)));
     if (typeof val === "object" && val !== null) {
@@ -108242,8 +108252,13 @@ async function resolveSandboxFiles(input, ctx, isFileField = false) {
     return val;
   }
   const resolved = await traverse2(input, isFileField);
-  return { resolved, cleanup: async () => {
-  } };
+  return {
+    resolved,
+    cleanup: async () => {
+      await Promise.all(cleanups.map((fn) => fn().catch(() => {
+      })));
+    }
+  };
 }
 
 // src/commands/acculynx_create_job.ts
@@ -109967,14 +109982,17 @@ var acculynx_add_job_document_default = defineTool({
     file: external_exports.string().describe(
       "File to upload: a local path (e.g. 'proposal.pdf'), an https URL (downloaded server-side, 25 MB max), a data: URI (add ;name=<filename> before ;base64 to set the stored filename), or a bare base64 string (file type sniffed from content)"
     ),
+    fileName: external_exports.string().optional().describe(
+      "Filename to store in AccuLynx (e.g. 'McPherson Supplement 1.pdf'). Overrides any name derived from the input; recommended for base64 and URL inputs, which otherwise get a generated name."
+    ),
     description: external_exports.string().optional().describe("Brief file context description")
   }),
-  async execute({ jobId, documentFolderId, file: file2, description }, ctx) {
+  async execute({ jobId, documentFolderId, file: file2, fileName, description }, ctx) {
     let resolvedFile = file2;
     let cleanup = async () => {
     };
     try {
-      const fileRes = await resolveSandboxFile(file2, ctx);
+      const fileRes = await resolveSandboxFile(file2, ctx, { fileName });
       if (fileRes) {
         resolvedFile = fileRes.path;
         cleanup = fileRes.cleanup;
@@ -110010,6 +110028,9 @@ var acculynx_post_upload_photo_or_video_default = defineTool({
   approval: always(),
   inputSchema: external_exports.object({
     jobId: external_exports.string().describe("The job's unique identifier"),
+    fileName: external_exports.string().optional().describe(
+      "Filename to store in AccuLynx (e.g. 'front-elevation.jpg'). Overrides any name derived from the file input; recommended for base64 inputs, which otherwise get a generated name."
+    ),
     body: external_exports.object({
       file: external_exports.string().describe(
         "File to upload: a local path (e.g. 'photo.jpg'), an https URL (handed to AccuLynx as fileUri), a data: URI (add ;name=<filename> before ;base64 to set the stored filename), or a bare base64 string (file type sniffed from content; 25 MB max)"
@@ -110021,15 +110042,19 @@ var acculynx_post_upload_photo_or_video_default = defineTool({
       externalSource: external_exports.string().describe("A field to link the file with a job external reference source").optional()
     })
   }),
-  async execute({ body, jobId }, ctx) {
+  async execute({ body, jobId, fileName }, ctx) {
     let resolvedBody = preferFileUriForUrls(body);
     let cleanup = async () => {
     };
     try {
       const client2 = getAccuLynxClient();
-      const resolveRes = await resolveSandboxFiles(resolvedBody, ctx);
-      resolvedBody = resolveRes.resolved;
-      cleanup = resolveRes.cleanup;
+      if (resolvedBody.file) {
+        const fileRes = await resolveSandboxFile(resolvedBody.file, ctx, { fileName });
+        if (fileRes) {
+          resolvedBody = { ...resolvedBody, file: fileRes.path };
+          cleanup = fileRes.cleanup;
+        }
+      }
       const res = await client2.postUploadPhotoOrVideo(resolvedBody, { jobId });
       return formatToolResponse(res.data || { success: true, message: "Operation completed successfully." }, void 0);
     } catch (error51) {

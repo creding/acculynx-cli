@@ -185,7 +185,20 @@ async function writeTempFile(data: Buffer, filename: string): Promise<{ path: st
   return { path: filePath, cleanup: () => fs.rm(dir, { recursive: true, force: true }) };
 }
 
-async function downloadRemoteFile(url: URL): Promise<{ path: string; cleanup: () => Promise<void> }> {
+/** URI-decode and strip directory components; returns "" when nothing usable remains. */
+function sanitizeName(raw: string | undefined): string {
+  if (!raw) return "";
+  let decoded = raw;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    // keep the raw value when it is not valid percent-encoding
+  }
+  const base = path.basename(decoded.trim());
+  return base && base !== "." && base !== ".." ? base : "";
+}
+
+async function downloadRemoteFile(url: URL, overrideName = ""): Promise<{ path: string; cleanup: () => Promise<void> }> {
   const insecureAllowed = !!process.env.ACCULYNX_ALLOW_INSECURE_FILE_URLS;
   if (url.protocol !== "https:" && !insecureAllowed) {
     throw new Error(`Only https file URLs are supported (got ${url.protocol}//).`);
@@ -205,7 +218,7 @@ async function downloadRemoteFile(url: URL): Promise<{ path: string; cleanup: ()
   }
   const urlName = path.basename(url.pathname) || "";
   const mimeExt = MIME_EXTENSIONS[(res.headers.get("content-type") ?? "").split(";")[0].trim()] ?? "";
-  const filename = urlName.includes(".") ? urlName : `download${mimeExt || ".bin"}`;
+  const filename = overrideName || (urlName.includes(".") ? urlName : `download${mimeExt || ".bin"}`);
   return writeTempFile(data, filename);
 }
 
@@ -273,18 +286,7 @@ function decodeDataUri(uri: string): { data: Buffer; filename: string } {
 
   // ;name=<filename> (the convention @readme/api-core also uses) wins;
   // URI-decode it and strip any directory components so it stays in the temp dir.
-  let filename = "";
-  if (nameParam) {
-    const raw = nameParam.slice("name=".length);
-    let decoded = raw;
-    try {
-      decoded = decodeURIComponent(raw);
-    } catch {
-      // keep the raw value when it is not valid percent-encoding
-    }
-    const base = path.basename(decoded.trim());
-    if (base && base !== "." && base !== "..") filename = base;
-  }
+  let filename = nameParam ? sanitizeName(nameParam.slice("name=".length)) : "";
   if (!filename) filename = `upload${MIME_EXTENSIONS[mime] ?? sniffExtension(data)}`;
   return { data, filename };
 }
@@ -320,30 +322,44 @@ export function preferFileUriForUrls<T extends { file?: string; fileUri?: string
 export async function resolveSandboxFile(
   fileInput: string | undefined,
   _ctx: unknown,
+  opts: { fileName?: string } = {},
 ): Promise<{ path: string; cleanup: () => Promise<void> } | null> {
   if (!fileInput || typeof fileInput !== "string") return null;
+  const named = sanitizeName(opts.fileName);
 
   if (/^https?:\/\//i.test(fileInput)) {
-    return downloadRemoteFile(new URL(fileInput));
+    return downloadRemoteFile(new URL(fileInput), named);
   }
   if (fileInput.startsWith("data:")) {
     const { data, filename } = decodeDataUri(fileInput);
-    return writeTempFile(data, filename);
+    return writeTempFile(data, named || filename);
   }
 
   // Bare base64 (no data: prefix) — checked before the filesystem so a
   // multi-megabyte payload is never handed to fs.access as a "path".
   const rawData = decodeRawBase64(fileInput);
   if (rawData) {
-    return writeTempFile(rawData, `upload${sniffExtension(rawData)}`);
+    return writeTempFile(rawData, named || `upload${sniffExtension(rawData)}`);
   }
 
   const resolved = path.resolve(process.cwd(), fileInput);
   try {
     await fs.access(resolved);
+    if (named && named !== path.basename(resolved)) {
+      // Renaming a local file: copy into a temp dir under the requested name.
+      return writeTempFile(await fs.readFile(resolved), named);
+    }
     return { path: resolved, cleanup: async () => {} };
   } catch {
-    return null;
+    // Passing the unresolved string through would make the SDK silently drop
+    // the file param and surface AccuLynx's misleading "Filename is required".
+    const display = fileInput.length > 120 ? `${fileInput.slice(0, 120)}…` : fileInput;
+    throw new Error(
+      `File input "${display}" could not be resolved. Accepted forms: an existing local path (CLI only), ` +
+        `an https URL, a data: URI (data:<mime>;name=<filename>;base64,<payload>), or a bare base64 string. ` +
+        `The hosted MCP server cannot read paths from your machine or sandbox — send the file content itself ` +
+        `as a URL or base64.`,
+    );
   }
 }
 
@@ -358,10 +374,13 @@ export async function resolveSandboxFiles<T>(
   ctx: unknown,
   isFileField = false,
 ): Promise<ResolvedFilesResult<T>> {
+  const cleanups: Array<() => Promise<void>> = [];
   async function traverse(val: unknown, isField: boolean): Promise<unknown> {
     if (typeof val === "string" && isField) {
       const fileRes = await resolveSandboxFile(val, ctx);
-      return fileRes ? fileRes.path : val;
+      if (!fileRes) return val;
+      cleanups.push(fileRes.cleanup);
+      return fileRes.path;
     }
     if (Array.isArray(val)) return Promise.all(val.map((item) => traverse(item, isField)));
     if (typeof val === "object" && val !== null) {
@@ -376,5 +395,10 @@ export async function resolveSandboxFiles<T>(
     return val;
   }
   const resolved = (await traverse(input, isFileField)) as T;
-  return { resolved, cleanup: async () => {} };
+  return {
+    resolved,
+    cleanup: async () => {
+      await Promise.all(cleanups.map((fn) => fn().catch(() => {})));
+    },
+  };
 }

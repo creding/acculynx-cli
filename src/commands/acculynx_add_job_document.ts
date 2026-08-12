@@ -16,13 +16,17 @@ export default defineTool({
           "a data: URI (add ;name=<filename> before ;base64 to set the stored filename), or a bare base64 string " +
           "(file type sniffed from content)",
       ),
+    fileName: z.string().optional().describe(
+      "Filename to store in AccuLynx (e.g. 'McPherson Supplement 1.pdf'). Overrides any name derived " +
+        "from the input; recommended for base64 and URL inputs, which otherwise get a generated name.",
+    ),
     description: z.string().optional().describe("Brief file context description"),
   }),
-  async execute({ jobId, documentFolderId, file, description }, ctx) {
+  async execute({ jobId, documentFolderId, file, fileName, description }, ctx) {
     let resolvedFile = file;
     let cleanup = async () => {};
     try {
-      const fileRes = await resolveSandboxFile(file, ctx);
+      const fileRes = await resolveSandboxFile(file, ctx, { fileName });
       if (fileRes) {
         resolvedFile = fileRes.path;
         cleanup = fileRes.cleanup;

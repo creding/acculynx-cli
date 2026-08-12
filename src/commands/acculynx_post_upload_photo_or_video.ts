@@ -5,7 +5,7 @@ import {
   getAccuLynxClient,
   handleApiError,
   formatToolResponse,
-  resolveSandboxFiles,
+  resolveSandboxFile,
   preferFileUriForUrls,
 } from "../lib/acculynx.ts";
 
@@ -14,6 +14,10 @@ export default defineTool({
   approval: always(),
   inputSchema: z.object({
     jobId: z.string().describe("The job's unique identifier"),
+    fileName: z.string().optional().describe(
+      "Filename to store in AccuLynx (e.g. 'front-elevation.jpg'). Overrides any name derived from " +
+        "the file input; recommended for base64 inputs, which otherwise get a generated name.",
+    ),
     body: z.object({
     file: z
       .string()
@@ -30,14 +34,18 @@ export default defineTool({
     externalSource: z.string().describe("A field to link the file with a job external reference source").optional()
   }),
   }),
-  async execute({ body, jobId }, ctx) {
+  async execute({ body, jobId, fileName }, ctx) {
     let resolvedBody = preferFileUriForUrls(body);
     let cleanup = async () => {};
     try {
       const client = getAccuLynxClient();
-      const resolveRes = await resolveSandboxFiles(resolvedBody, ctx);
-      resolvedBody = resolveRes.resolved;
-      cleanup = resolveRes.cleanup;
+      if (resolvedBody.file) {
+        const fileRes = await resolveSandboxFile(resolvedBody.file, ctx, { fileName });
+        if (fileRes) {
+          resolvedBody = { ...resolvedBody, file: fileRes.path };
+          cleanup = fileRes.cleanup;
+        }
+      }
 
       const res = await client.postUploadPhotoOrVideo(resolvedBody, { jobId });
       return formatToolResponse(res.data || { success: true, message: "Operation completed successfully." }, undefined);

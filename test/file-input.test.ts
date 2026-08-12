@@ -23,8 +23,65 @@ test("local path still resolves as before", async () => {
   await fs.rm(tmp);
 });
 
-test("nonexistent plain path resolves to null, as before", async () => {
-  assert.equal(await resolveSandboxFile("no-such-file-anywhere.xyz", undefined), null);
+test("nonexistent path throws a clear error naming the accepted forms", async () => {
+  // Silent null passthrough made the SDK drop the file param, surfacing as
+  // AccuLynx's misleading "Filename is required" — see docs/superpowers/specs.
+  await assert.rejects(
+    () => resolveSandboxFile("no-such-file-anywhere.xyz", undefined),
+    (err: Error) => {
+      assert.match(err.message, /no-such-file-anywhere\.xyz/);
+      assert.match(err.message, /https URL/i);
+      assert.match(err.message, /base64/i);
+      assert.match(err.message, /cannot read (local )?paths/i);
+      return true;
+    },
+  );
+});
+
+test("undefined and empty file inputs still resolve to null", async () => {
+  assert.equal(await resolveSandboxFile(undefined, undefined), null);
+  assert.equal(await resolveSandboxFile("", undefined), null);
+});
+
+// ---- explicit fileName override ----
+
+test("fileName overrides the name for base64 input", async () => {
+  const big = Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.alloc(300, 7)]);
+  const res = await resolveSandboxFile(big.toString("base64"), undefined, {
+    fileName: "McPherson Supplement 1 2026-08-12.pdf",
+  });
+  assert.ok(res);
+  assert.equal(path.basename(res.path), "McPherson Supplement 1 2026-08-12.pdf");
+  await res.cleanup();
+});
+
+test("fileName beats a data URI's ;name= parameter", async () => {
+  const uri = `data:application/pdf;name=other.pdf;base64,${Buffer.alloc(300, 7).toString("base64")}`;
+  const res = await resolveSandboxFile(uri, undefined, { fileName: "wanted.pdf" });
+  assert.ok(res);
+  assert.equal(path.basename(res.path), "wanted.pdf");
+  await res.cleanup();
+});
+
+test("fileName is sanitized to a basename", async () => {
+  const big = Buffer.alloc(300, 7).toString("base64");
+  const res = await resolveSandboxFile(big, undefined, { fileName: "../../etc/passwd" });
+  assert.ok(res);
+  assert.equal(path.basename(res.path), "passwd");
+  assert.ok(!res.path.includes(".."));
+  await res.cleanup();
+});
+
+test("fileName renames a local file via a temp copy, leaving the original", async () => {
+  const tmp = path.join(os.tmpdir(), `alx-rename-${process.pid}.txt`);
+  await fs.writeFile(tmp, "content");
+  const res = await resolveSandboxFile(tmp, undefined, { fileName: "renamed.txt" });
+  assert.ok(res);
+  assert.equal(path.basename(res.path), "renamed.txt");
+  assert.equal(await fs.readFile(res.path, "utf8"), "content");
+  await res.cleanup();
+  await fs.access(tmp); // original untouched
+  await fs.rm(tmp);
 });
 
 test("data URI decodes to a temp file and cleanup removes it", async () => {
@@ -80,9 +137,11 @@ test("raw base64 tolerates whitespace/newlines in the payload", async () => {
   await res.cleanup();
 });
 
-test("short base64-charset strings still fall through as paths (null)", async () => {
-  assert.equal(await resolveSandboxFile("hello", undefined), null);
-  assert.equal(await resolveSandboxFile("aGVsbG8=", undefined), null); // "hello" encoded, but tiny
+test("short base64-charset strings are treated as paths and get the clear error", async () => {
+  // Below the 256-char base64 floor these read as filenames; when no such
+  // file exists the caller gets the accepted-forms error, not a silent drop.
+  await assert.rejects(() => resolveSandboxFile("hello", undefined), /could not be resolved/i);
+  await assert.rejects(() => resolveSandboxFile("aGVsbG8=", undefined), /could not be resolved/i);
 });
 
 test("oversized raw base64 is rejected", async () => {
@@ -163,6 +222,14 @@ test("URL input downloads to a temp file named after the URL, and cleanup remove
   assert.equal(path.basename(res.path).endsWith("photo.png"), true);
   await res.cleanup();
   await assert.rejects(fs.access(res.path));
+});
+
+test("fileName overrides the URL-derived name for downloads", async () => {
+  const res = await resolveSandboxFile(`${base}/photo.png`, undefined, { fileName: "front-elevation.png" });
+  assert.ok(res);
+  assert.equal(path.basename(res.path), "front-elevation.png");
+  assert.deepEqual(await fs.readFile(res.path), PNG_BYTES);
+  await res.cleanup();
 });
 
 test("URL that 404s throws instead of silently passing the URL through", async () => {

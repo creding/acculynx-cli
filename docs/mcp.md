@@ -96,11 +96,20 @@ the file content itself in any of these string forms:
 | bare base64 | `JVBERi0xLjQK…` | Detected when the string is ≥ 256 chars of pure base64. File type is sniffed from magic bytes (PNG/JPEG/GIF/WEBP/PDF/MP4/MOV/HEIC/ZIP). |
 | local path | `proposal.pdf` | CLI only — meaningless through the hosted server. |
 
-Prefer a data: URI with `;name=` when the filename matters (documents), and
-bare base64 for quick photo uploads. Inline payloads are capped at 25 MB
-decoded, but Vercel rejects request bodies over ~4.5 MB, so through the hosted
-server an inline upload tops out around a 3 MB file — send anything larger by
-https URL.
+`documents add` and `photos upload` also take an explicit `fileName` input
+that overrides any derived name for every form — the easiest way to store
+"McPherson Supplement 1.pdf" instead of a generated name. An input that
+matches none of the forms (e.g. a path that does not exist server-side) now
+fails fast with an error naming the accepted forms, instead of the SDK
+silently dropping the file and AccuLynx replying "Filename is required".
+
+Inline payloads are capped at 25 MB decoded, but Vercel rejects request
+bodies over ~4.5 MB, so through the hosted server an inline upload tops out
+around a 3 MB file — send anything larger by https URL.
+
+Document ingest is asynchronous: the AccuLynx API returns 202 Accepted with
+no body and offers no list/get/delete for job documents, so uploads cannot be
+confirmed or undone via API — only in the AccuLynx UI.
 
 ## Known gaps
 
