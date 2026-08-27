@@ -4,7 +4,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import os from "node:os";
 import { signBlob, verifyBlob } from "./oauth.ts";
-import { getAccuLynxClient, handleApiError } from "../lib/acculynx.ts";
+import { getAccuLynxClient, handleApiError, sanitizeUploadFileName } from "../lib/acculynx.ts";
 
 /**
  * Ticketed direct uploads: `acculynx_request_upload` mints an HMAC-signed,
@@ -39,6 +39,7 @@ export function mintUploadTicket(fields: UploadFields, key: string, opts: { ttlS
       exp: Math.floor(Date.now() / 1000) + (opts.ttlS ?? UPLOAD_TICKET_TTL_S),
       n: randomBytes(16).toString("base64url"),
       ...fields,
+      fileName: sanitizeUploadFileName(fields.fileName),
     },
     key,
   );
@@ -96,7 +97,7 @@ export interface ForwardArgs extends UploadFields {
 async function forwardToAccuLynx(args: ForwardArgs): Promise<{ status: number }> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "acculynx-direct-"));
   try {
-    const filePath = path.join(dir, path.basename(args.fileName));
+    const filePath = path.join(dir, sanitizeUploadFileName(path.basename(args.fileName)));
     await fs.writeFile(filePath, args.data);
     const client = getAccuLynxClient();
     const res = await client.postAddJobDocument(

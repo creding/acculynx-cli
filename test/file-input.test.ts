@@ -5,7 +5,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
-import { resolveSandboxFile } from "../src/lib/acculynx.ts";
+import { resolveSandboxFile, sanitizeUploadFileName } from "../src/lib/acculynx.ts";
 
 const PNG_BYTES = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
@@ -292,4 +292,59 @@ test("local path and data URI inputs stay on file", () => {
 test("an explicit fileUri is left alone", () => {
   const body = preferFileUriForUrls({ fileUri: "https://a.example/x.jpg" });
   assert.equal(body.fileUri, "https://a.example/x.jpg");
+});
+
+// ---- apostrophes in filenames (AccuLynx 400 "Filename is required") ----
+//
+// @readme/api-core encodes the upload filename into a data URI as
+// `;name=${encodeURIComponent(basename)}`. encodeURIComponent leaves `'`
+// unescaped, but @readme/data-urls' DATA_URL_REGEX excludes `'` from
+// media-type parameter values, so parse() fails, fetch-har never rebuilds the
+// File, and the raw data URI is posted as a plain text field — AccuLynx then
+// rejects the request with 400 "Filename is required".
+
+test("sanitizeUploadFileName strips apostrophes, which break the SDK's data URI", () => {
+  assert.equal(sanitizeUploadFileName("Receipt Lowe's 2026-08-27.jpg"), "Receipt Lowes 2026-08-27.jpg");
+  assert.equal(sanitizeUploadFileName("O'Brien's roof.pdf"), "OBriens roof.pdf");
+});
+
+test("sanitizeUploadFileName leaves every other unescaped character alone", () => {
+  // encodeURIComponent leaves -_.!~*'() raw; only ' breaks the parse.
+  const name = "a-b_c.d!e~f*g(h)i.jpg";
+  assert.equal(sanitizeUploadFileName(name), name);
+});
+
+test("sanitized names survive the api-core → data-urls round trip", async () => {
+  const { parse } = await import("@readme/data-urls");
+  const roundTrip = (basename: string) =>
+    parse(`data:image/jpeg;name=${encodeURIComponent(basename)};base64,AAAA`);
+
+  // The exact failure this guards against:
+  assert.equal(roundTrip("Receipt Lowe's.jpg"), false);
+  // ...and that sanitizing fixes it:
+  const ok = roundTrip(sanitizeUploadFileName("Receipt Lowe's.jpg"));
+  assert.ok(ok, "sanitized filename must parse as a data URI");
+  assert.equal(decodeURIComponent((ok as { name: string }).name), "Receipt Lowes.jpg");
+});
+
+test("fileName override drops apostrophes", async () => {
+  const big = Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.alloc(300, 7)]);
+  const res = await resolveSandboxFile(big.toString("base64"), undefined, {
+    fileName: "Receipt Lowe's.pdf",
+  });
+  assert.ok(res);
+  assert.equal(path.basename(res.path), "Receipt Lowes.pdf");
+  await res.cleanup();
+});
+
+test("a local file whose own name has an apostrophe is copied to a safe temp name", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "alx-apos-"));
+  const original = path.join(dir, "Lowe's receipt.png");
+  await fs.writeFile(original, PNG_BYTES);
+  const res = await resolveSandboxFile(original, undefined);
+  assert.ok(res);
+  assert.equal(path.basename(res.path), "Lowes receipt.png");
+  await res.cleanup();
+  await fs.access(original); // the original is left untouched
+  await fs.rm(dir, { recursive: true, force: true });
 });

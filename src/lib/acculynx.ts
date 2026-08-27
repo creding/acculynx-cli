@@ -185,6 +185,23 @@ async function writeTempFile(data: Buffer, filename: string): Promise<{ path: st
   return { path: filePath, cleanup: () => fs.rm(dir, { recursive: true, force: true }) };
 }
 
+/**
+ * Strip apostrophes from a filename bound for AccuLynx.
+ *
+ * @readme/api-core encodes the upload filename into a data URI as
+ * `;name=${encodeURIComponent(basename)}`. encodeURIComponent leaves `'`
+ * unescaped (it is in the unreserved `-_.!~*'()` set), but @readme/data-urls'
+ * DATA_URL_REGEX excludes `'` from media-type parameter values. So parse()
+ * returns false, fetch-har never rebuilds the File from the data URI, and the
+ * raw URI is posted as a plain text field — AccuLynx then rejects the whole
+ * request with 400 "Filename is required". The apostrophe is the only
+ * character in that unreserved set the regex rejects, so dropping it is the
+ * whole fix; "Lowe's" becomes "Lowes", which is what a person would type.
+ */
+export function sanitizeUploadFileName(name: string): string {
+  return name.replace(/'/g, "");
+}
+
 /** URI-decode and strip directory components; returns "" when nothing usable remains. */
 function sanitizeName(raw: string | undefined): string {
   if (!raw) return "";
@@ -194,7 +211,7 @@ function sanitizeName(raw: string | undefined): string {
   } catch {
     // keep the raw value when it is not valid percent-encoding
   }
-  const base = path.basename(decoded.trim());
+  const base = sanitizeUploadFileName(path.basename(decoded.trim()));
   return base && base !== "." && base !== ".." ? base : "";
 }
 
@@ -345,9 +362,12 @@ export async function resolveSandboxFile(
   const resolved = path.resolve(process.cwd(), fileInput);
   try {
     await fs.access(resolved);
-    if (named && named !== path.basename(resolved)) {
-      // Renaming a local file: copy into a temp dir under the requested name.
-      return writeTempFile(await fs.readFile(resolved), named);
+    const target = named || sanitizeUploadFileName(path.basename(resolved));
+    if (target !== path.basename(resolved)) {
+      // Renaming a local file — either because the caller asked, or because the
+      // file's own name carries an apostrophe the SDK cannot encode. Copy into
+      // a temp dir under the safe name and leave the original alone.
+      return writeTempFile(await fs.readFile(resolved), target);
     }
     return { path: resolved, cleanup: async () => {} };
   } catch {

@@ -220,3 +220,34 @@ test("AccuLynx failure returns 502 and leaves the ticket unconsumed for one retr
     server.close();
   }
 });
+
+// ---- apostrophes in filenames ----
+// See the note in test/file-input.test.ts: an apostrophe makes the SDK post the
+// data URI as a plain text field, and AccuLynx answers 400 "Filename is
+// required". The ticket binds the destination, so the name is made safe at mint
+// time — ticket, PUT response, and the forwarded call then all agree.
+
+test("mint strips apostrophes from the bound fileName", () => {
+  const ticket = mintUploadTicket({ ...FIELDS, fileName: "Receipt Lowe's 2026-08-27.jpg" }, KEY);
+  const v = verifyUploadTicket(ticket, KEY);
+  assert.equal(v.ok, true);
+  if (v.ok) assert.equal(v.fields.fileName, "Receipt Lowes 2026-08-27.jpg");
+});
+
+test("a PUT under an apostrophe'd name forwards and reports the safe name", async () => {
+  __resetConsumedForTests();
+  let forwarded: any = null;
+  const { base, server } = await startServer(async (args) => {
+    forwarded = args;
+    return { status: 202 };
+  });
+  try {
+    const ticket = mintUploadTicket({ ...FIELDS, fileName: "Receipt Lowe's.pdf" }, KEY);
+    const r = await put(base, ticket, PDF);
+    assert.equal(r.status, 200);
+    assert.equal(r.json.fileName, "Receipt Lowes.pdf");
+    assert.equal(forwarded.fileName, "Receipt Lowes.pdf");
+  } finally {
+    server.close();
+  }
+});
