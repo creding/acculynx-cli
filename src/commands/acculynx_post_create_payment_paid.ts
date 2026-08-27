@@ -11,7 +11,7 @@ export default defineAcculynxTool({
     to: z.string().describe("Payment paid to").optional(),
     paymentMethod: z.string().max(50).describe("Payment method used to perform the payment").optional(),
     amount: z.number().describe("Amount of payment paid").optional(),
-    paymentDate: z.string().describe("An ISO 8601 string of the payment's datetime including the time component and ending with 'Z' (so in UTC). Note: Only the date is taken into account. The time component is discarded. https://en.wikipedia.org/wiki/ISO_8601#Coordinated_Universal_Time_(UTC)").optional(),
+    paymentDate: z.iso.datetime().describe("An ISO 8601 string of the payment's datetime including the time component and ending with 'Z' (so in UTC). Note: Only the date is taken into account. The time component is discarded. https://en.wikipedia.org/wiki/ISO_8601#Coordinated_Universal_Time_(UTC)").optional(),
     notes: z.string().max(250).describe("Optional note for the payment.").optional(),
     accountTypeId: z.string().describe("Id of account type").optional(),
     refNumber: z.string().max(50).optional(),

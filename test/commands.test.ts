@@ -54,6 +54,21 @@ test("add-expense: malformed paymentDate fails client-side, not as an API 400", 
   assert.ok(r.error!.issues.some((i) => i.path.join(".") === "body.paymentDate"));
 });
 
+test("add-paid: paymentDate gets the same ISO validation as add-expense but stays optional", () => {
+  const bad = addPaid.inputSchema.safeParse({ jobId: UUID, body: { amount: 1, paymentDate: "banana" } });
+  assert.ok(!bad.success, "malformed dates must fail client-side, not as an API 400");
+  assert.ok(bad.error!.issues.some((i) => i.path.join(".") === "body.paymentDate"));
+
+  const dateOnly = addPaid.inputSchema.safeParse({ jobId: UUID, body: { paymentDate: "2026-08-27" } });
+  assert.ok(!dateOnly.success, "the documented contract is a Z-suffixed ISO datetime");
+
+  const ok = addPaid.inputSchema.safeParse({ jobId: UUID, body: { amount: 1, paymentDate: ISO } });
+  assert.ok(ok.success, JSON.stringify((ok as any).error?.issues));
+
+  const omitted = addPaid.inputSchema.safeParse({ jobId: UUID, body: { amount: 1 } });
+  assert.ok(omitted.success, "paymentDate remains optional on add-paid — the API does not hard-require it there");
+});
+
 test("add-expense: call forwards the body with paymentDate to the SDK", async () => {
   const { client, calls } = mockClient({ id: "pay-1" });
   const body = { to: "Vendor", amount: 171.81, paymentDate: ISO, isPaid: true };

@@ -109903,7 +109903,7 @@ var acculynx_post_create_payment_paid_default = defineAcculynxTool({
       to: external_exports.string().describe("Payment paid to").optional(),
       paymentMethod: external_exports.string().max(50).describe("Payment method used to perform the payment").optional(),
       amount: external_exports.number().describe("Amount of payment paid").optional(),
-      paymentDate: external_exports.string().describe("An ISO 8601 string of the payment's datetime including the time component and ending with 'Z' (so in UTC). Note: Only the date is taken into account. The time component is discarded. https://en.wikipedia.org/wiki/ISO_8601#Coordinated_Universal_Time_(UTC)").optional(),
+      paymentDate: external_exports.iso.datetime().describe("An ISO 8601 string of the payment's datetime including the time component and ending with 'Z' (so in UTC). Note: Only the date is taken into account. The time component is discarded. https://en.wikipedia.org/wiki/ISO_8601#Coordinated_Universal_Time_(UTC)").optional(),
       notes: external_exports.string().max(250).describe("Optional note for the payment.").optional(),
       accountTypeId: external_exports.string().describe("Id of account type").optional(),
       refNumber: external_exports.string().max(50).optional(),
