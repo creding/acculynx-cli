@@ -109903,6 +109903,11 @@ var acculynx_post_create_payment_paid_default = defineAcculynxTool({
       to: external_exports.string().describe("Payment paid to").optional(),
       paymentMethod: external_exports.string().max(50).describe("Payment method used to perform the payment").optional(),
       amount: external_exports.number().describe("Amount of payment paid").optional(),
+      // Deliberately optional: the spec requires only `amount` here, and finding
+      // out whether the API also mandates paymentDate means creating a payment
+      // record there is no API to delete. If it is required, an omitted date
+      // costs one clean 400 ("PaymentDate cannot be null or empty") and creates
+      // nothing; requiring it on a guess would hard-block date-less calls.
       paymentDate: external_exports.iso.datetime().describe("An ISO 8601 string of the payment's datetime including the time component and ending with 'Z' (so in UTC). Note: Only the date is taken into account. The time component is discarded. https://en.wikipedia.org/wiki/ISO_8601#Coordinated_Universal_Time_(UTC)").optional(),
       notes: external_exports.string().max(250).describe("Optional note for the payment.").optional(),
       accountTypeId: external_exports.string().describe("Id of account type").optional(),
