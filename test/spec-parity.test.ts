@@ -10,6 +10,16 @@ import { z } from "zod";
  * so an omitted field is silently dropped — the caller "sent" it, the API never
  * saw it, and the error (if any) blames the caller. Every command's declared
  * body must be a superset of the spec's request-body properties.
+ *
+ * Scope: presence and maxLength ceilings only — the axes where this spec is
+ * reliable. `required` arrays and nullability are deliberately NOT compared:
+ * the spec is demonstrably wrong there (expense paymentDate is nullable:true
+ * in the spec yet the API 400s without it — "PaymentDate cannot be null or
+ * empty"), and its required arrays are near-empty across the board, so most
+ * mutating commands are legitimately stricter than spec. Schemas may exceed
+ * the spec (extra required fields, format patterns, tighter caps); deliberate
+ * overrides are pinned behaviorally in commands.test.ts and explained by
+ * comments at the field they affect.
  */
 
 const ROOT = process.cwd();
