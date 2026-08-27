@@ -9,7 +9,7 @@ export default defineAcculynxTool({
     jobId: z.string().describe("The job's unique identifier"),
     body: z.object({
     insuranceCompanyId: z.string().describe("The insurance company's unique ID is to be set to the job.").optional(),
-    insuranceCompanyName: z.string().describe("A job can have an insurance company that is not from the list managed in Account Settings. In this case, the 'insuranceCompanyId' should be null. The text will be assigned to the comments field for the 'Other' (active) insurance company.").optional()
+    insuranceCompanyName: z.string().max(100).describe("A job can have an insurance company that is not from the list managed in Account Settings. In this case, the 'insuranceCompanyId' should be null. The text will be assigned to the comments field for the 'Other' (active) insurance company.").optional()
   }),
   }),
   async call(client, { body, jobId }) {

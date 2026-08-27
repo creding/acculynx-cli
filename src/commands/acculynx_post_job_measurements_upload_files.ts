@@ -21,9 +21,9 @@ export default defineTool({
     ).optional(),
     latitude: z.number().describe("Latitude of the map location for the new measurement order, value between -90 and 90."),
     longitude: z.number().describe("Longitude of the map location for the new measurement order, value between -180 and 180."),
-    providerMeasurementOrderId: z.string().describe("A text with the provider order identifier, special characters not allowed."),
+    providerMeasurementOrderId: z.string().max(40).describe("A text with the provider order identifier, special characters not allowed."),
     providerId: z.enum(["Unknown", "Hover", "RoofSnap", "External"]),
-    measurementOrderDescription: z.string().describe("A text with a description of the new measurement order."),
+    measurementOrderDescription: z.string().max(500).describe("A text with a description of the new measurement order."),
     model3DUrl: z.string().describe("The URL of the 3D model file.").optional(),
     orderedDate: z.string().describe("The creation DateTime for the new measurement order. An ISO 8601 string of datetime including the time component and ending with 'Z' (so in UTC). https://en.wikipedia.org/wiki/ISO_8601#Coordinated_Universal_Time_(UTC)"),
     completedDate: z.string().describe("The completed DateTime for the new measurement order. An ISO 8601 string of datetime including the time component and ending with 'Z' (so in UTC). https://en.wikipedia.org/wiki/ISO_8601#Coordinated_Universal_Time_(UTC)").optional()

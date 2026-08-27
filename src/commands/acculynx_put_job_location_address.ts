@@ -8,12 +8,12 @@ export default defineAcculynxTool({
   inputSchema: z.object({
     jobId: z.string().describe("The job's unique identifier"),
     body: z.object({
-    street1: z.string().optional(),
-    street2: z.string().optional(),
-    city: z.string().optional(),
-    state: z.string().optional(),
-    country: z.string().optional(),
-    zipCode: z.string().optional()
+    street1: z.string().max(250).optional(),
+    street2: z.string().max(50).optional(),
+    city: z.string().max(50).optional(),
+    state: z.string().max(50).optional(),
+    country: z.string().max(50).optional(),
+    zipCode: z.string().max(10).optional()
   }),
   }),
   async call(client, { body, jobId }) {

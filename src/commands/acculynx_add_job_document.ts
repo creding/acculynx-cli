@@ -21,8 +21,10 @@ export default defineTool({
         "from the input; recommended for base64 and URL inputs, which otherwise get a generated name.",
     ),
     description: z.string().optional().describe("Brief file context description"),
+    externalId: z.string().optional().describe("Link the file to a job external reference identifier"),
+    externalSource: z.string().optional().describe("Link the file to a job external reference source"),
   }),
-  async execute({ jobId, documentFolderId, file, fileName, description }, ctx) {
+  async execute({ jobId, documentFolderId, file, fileName, description, externalId, externalSource }, ctx) {
     let resolvedFile = file;
     let cleanup = async () => {};
     try {
@@ -38,6 +40,8 @@ export default defineTool({
           file: resolvedFile,
           documentFolderId,
           description,
+          externalId,
+          externalSource,
         },
         { jobId }
       );

@@ -15,7 +15,6 @@ export default defineAcculynxTool({
     const body: any = { logDate, type };
     if (description) body.description = description;
     const res = await client.postContactLog(body, { contactId });
-    return res.data || { success: true, message: "Contact log entry created successfully." },
-      undefined;
+    return res.data || { success: true, message: "Contact log entry created successfully." };
   },
 });

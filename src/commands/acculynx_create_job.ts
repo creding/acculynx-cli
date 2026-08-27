@@ -31,7 +31,7 @@ export default defineAcculynxTool({
     tradeTypes: z.array(z.object({
       id: z.string().guid().describe("Trade Type UUID"),
     })).optional(),
-    notes: z.string().optional().describe("Initial job description remarks"),
+    notes: z.string().max(1000).optional().describe("Initial job description remarks"),
     salesOwnerIds: z.array(z.string().guid()).optional().describe("User UUIDs to assign as Sales Owners for the job"),
     companyRepresentativeIds: z.array(z.string().guid()).optional().describe("User UUIDs to assign as Company Representatives"),
     arOwnerIds: z.array(z.string().guid()).optional().describe("User UUIDs to assign as Accounts Receivable (AR) Owners"),

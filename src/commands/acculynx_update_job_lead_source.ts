@@ -17,7 +17,6 @@ export default defineAcculynxTool({
   }),
   async call(client, { jobId, leadSourceId }) {
     const res = await client.updateJobLeadSource({ id: leadSourceId }, { jobId });
-    return res.data || { success: true, message: "Lead source updated successfully." },
-      undefined;
+    return res.data || { success: true, message: "Lead source updated successfully." };
   },
 });

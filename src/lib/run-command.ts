@@ -101,20 +101,54 @@ function sampleFor(type: string, enumValues: string[] | undefined, key: string):
   return '"text"';
 }
 
-function sampleFromSchema(prop: any): unknown {
+function sampleFromSchema(prop: any, key = ""): unknown {
   const p = prop?.anyOf?.[0] ?? prop ?? {};
   if (p.type === "array") return [sampleFromSchema(p.items)];
   if (p.type === "object") {
-    const out: Record<string, unknown> = {};
-    for (const key of (p.required as string[]) ?? Object.keys(p.properties ?? {}).slice(0, 3)) {
-      out[key] = sampleFromSchema(p.properties?.[key]);
+    // Required keys first (an example must be runnable), padded with leading
+    // optional keys so it also shows the command's typical arguments.
+    const required = (p.required as string[]) ?? [];
+    const keys = [...required];
+    for (const k of Object.keys(p.properties ?? {})) {
+      if (keys.length >= Math.max(3, required.length)) break;
+      if (!keys.includes(k)) keys.push(k);
     }
+    const out: Record<string, unknown> = {};
+    for (const k of keys) out[k] = sampleFromSchema(p.properties?.[k], k);
     return out;
   }
   if (p.enum?.length) return p.enum[0];
   if (p.type === "number" || p.type === "integer") return 1;
   if (p.type === "boolean") return true;
+  if (p.format === "date-time" || /date$/i.test(key)) return "2026-07-28T00:00:00Z";
+  if (/id$/i.test(key)) return "3fa85f64-5717-4562-b3fc-2c963f66afa6";
   return "text";
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/**
+ * Keys present in the caller's input but absent from the parsed output. Zod
+ * object schemas strip unknown keys silently, which once turned "you sent
+ * paymentDate" into a 400 claiming it was never sent (the add-expense bug).
+ * Rejecting instead of stripping makes the mistake diagnosable in one call.
+ */
+function collectDroppedKeys(input: unknown, parsed: unknown, prefix = ""): string[] {
+  if (Array.isArray(input) && Array.isArray(parsed)) {
+    return input.flatMap((item, i) =>
+      i < parsed.length ? collectDroppedKeys(item, parsed[i], `${prefix}[${i}]`) : [],
+    );
+  }
+  if (isPlainObject(input) && isPlainObject(parsed)) {
+    return Object.keys(input).flatMap((key) => {
+      const path = prefix ? `${prefix}.${key}` : key;
+      if (!(key in parsed)) return input[key] === undefined ? [] : [path];
+      return collectDroppedKeys(input[key], parsed[key], path);
+    });
+  }
+  return [];
 }
 
 export function validateInput(
@@ -125,6 +159,14 @@ export function validateInput(
   const parsed = (entry.config.inputSchema as z.ZodType).safeParse(input);
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message }));
+    throw new ValidationError(`${entry.group} ${entry.verb}`, issues, shape.jsonSchema, makeExample(entry, shape));
+  }
+  const dropped = collectDroppedKeys(input, parsed.data);
+  if (dropped.length > 0) {
+    const issues = dropped.map((path) => ({
+      path,
+      message: "Unknown key: not accepted by this command's schema (it would have been silently ignored).",
+    }));
     throw new ValidationError(`${entry.group} ${entry.verb}`, issues, shape.jsonSchema, makeExample(entry, shape));
   }
   return parsed.data as Record<string, unknown>;

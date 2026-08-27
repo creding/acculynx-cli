@@ -16,7 +16,6 @@ export default defineAcculynxTool({
     if (endDate) body.endDate = endDate;
     if (notes) body.notes = notes;
     const res = await client.putInitialAppointmentForJob(body, { jobId });
-    return res.data || { success: true, message: "Initial appointment saved successfully." },
-      undefined;
+    return res.data || { success: true, message: "Initial appointment saved successfully." };
   },
 });

@@ -40,6 +40,49 @@ test("validateInput: failure carries issues, schema replay, and example", () => 
   }
 });
 
+test("validateInput: unknown top-level key is rejected, not silently dropped", () => {
+  try {
+    validateInput(entry, shape, { jobId: "abc", bogusKey: 1 });
+    assert.fail("should throw");
+  } catch (e) {
+    assert.ok(e instanceof ValidationError);
+    assert.ok(e.issues.some((i) => i.path === "bogusKey"), JSON.stringify(e.issues));
+    assert.match(e.issues.find((i) => i.path === "bogusKey")!.message, /unknown/i);
+  }
+});
+
+test("validateInput: unknown key nested in an object field is rejected with its path", () => {
+  try {
+    validateInput(entry, shape, { jobId: "abc", contact: { id: "c1", paymentDat: "typo" } });
+    assert.fail("should throw");
+  } catch (e) {
+    assert.ok(e instanceof ValidationError);
+    assert.ok(e.issues.some((i) => i.path === "contact.paymentDat"), JSON.stringify(e.issues));
+  }
+});
+
+test("validateInput: unknown key inside array elements is rejected with an indexed path", () => {
+  const arraySchema = z.object({ items: z.array(z.object({ id: z.string() })) });
+  const arrayEntry: CommandEntry = {
+    group: "x", verb: "y", tool: "t2",
+    config: { description: "d", inputSchema: arraySchema as any, call: async () => ({}) },
+  };
+  try {
+    validateInput(arrayEntry, introspect(arraySchema), { items: [{ id: "1", junk: true }] });
+    assert.fail("should throw");
+  } catch (e) {
+    assert.ok(e instanceof ValidationError);
+    assert.ok(e.issues.some((i) => i.path === "items[0].junk"), JSON.stringify(e.issues));
+  }
+});
+
+test("validateInput: undefined-valued stray keys and valid input still pass", () => {
+  const parsed = validateInput(entry, shape, { jobId: "abc", stray: undefined });
+  assert.deepEqual(parsed, { jobId: "abc" });
+  const full = validateInput(entry, shape, { jobId: "abc", contact: { id: "c1" }, pageSize: 3 });
+  assert.deepEqual(full, { jobId: "abc", contact: { id: "c1" }, pageSize: 3 });
+});
+
 test("stripEmpty removes null/undefined/empty objects deeply", () => {
   assert.deepEqual(stripEmpty({ a: 1, b: null, c: { d: null }, e: [null, 2] }), { a: 1, e: [null, 2] });
 });

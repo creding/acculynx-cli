@@ -3562,7 +3562,7 @@ var require_isPlainObject = __commonJS({
     var funcToString = funcProto.toString;
     var hasOwnProperty = objectProto.hasOwnProperty;
     var objectCtorString = funcToString.call(Object);
-    function isPlainObject2(value) {
+    function isPlainObject3(value) {
       if (!isObjectLike(value) || baseGetTag(value) != objectTag) {
         return false;
       }
@@ -3573,7 +3573,7 @@ var require_isPlainObject = __commonJS({
       var Ctor = hasOwnProperty.call(proto, "constructor") && proto.constructor;
       return typeof Ctor == "function" && Ctor instanceof Ctor && funcToString.call(Ctor) == objectCtorString;
     }
-    module2.exports = isPlainObject2;
+    module2.exports = isPlainObject3;
   }
 });
 
@@ -3599,11 +3599,11 @@ var require_src = __commonJS({
     var uniqWith = require_uniqWith();
     var defaults = require_defaults();
     var intersectionWith = require_intersectionWith();
-    var isPlainObject2 = require_isPlainObject();
+    var isPlainObject3 = require_isPlainObject();
     var isBoolean = require_isBoolean();
     var normalizeArray2 = (val) => Array.isArray(val) ? val : [val];
     var undef = (val) => val === void 0;
-    var keys = (obj) => isPlainObject2(obj) || Array.isArray(obj) ? Object.keys(obj) : [];
+    var keys = (obj) => isPlainObject3(obj) || Array.isArray(obj) ? Object.keys(obj) : [];
     var has = (obj, key) => obj.hasOwnProperty(key);
     var stringArray = (arr) => sortBy(uniq(arr));
     var undefEmpty = (val) => undef(val) || Array.isArray(val) && val.length === 0;
@@ -3612,7 +3612,7 @@ var require_src = __commonJS({
     var falseUndefined = (a2, b) => undef(a2) && b === false || undef(b) && a2 === false || isEqual(a2, b);
     var emptySchema = (schema) => undef(schema) || isEqual(schema, {}) || schema === true;
     var emptyObjUndef = (schema) => undef(schema) || isEqual(schema, {});
-    var isSchema2 = (val) => undef(val) || isPlainObject2(val) || val === true || val === false;
+    var isSchema2 = (val) => undef(val) || isPlainObject3(val) || val === true || val === false;
     function undefArrayEqual(a2, b) {
       if (undefEmpty(a2) && undefEmpty(b)) {
         return true;
@@ -3648,7 +3648,7 @@ var require_src = __commonJS({
       });
     }
     function items(a2, b, key, compare2) {
-      if (isPlainObject2(a2) && isPlainObject2(b)) {
+      if (isPlainObject3(a2) && isPlainObject3(b)) {
         return compare2(a2, b);
       } else if (Array.isArray(a2) && Array.isArray(b)) {
         return schemaGroup(a2, b, key, compare2);
@@ -4092,7 +4092,7 @@ var require_baseMergeDeep = __commonJS({
     var isBuffer2 = require_isBuffer();
     var isFunction = require_isFunction();
     var isObject6 = require_isObject();
-    var isPlainObject2 = require_isPlainObject();
+    var isPlainObject3 = require_isPlainObject();
     var isTypedArray = require_isTypedArray();
     var safeGet = require_safeGet();
     var toPlainObject = require_toPlainObject();
@@ -4121,7 +4121,7 @@ var require_baseMergeDeep = __commonJS({
           } else {
             newValue = [];
           }
-        } else if (isPlainObject2(srcValue) || isArguments(srcValue)) {
+        } else if (isPlainObject3(srcValue) || isArguments(srcValue)) {
           newValue = objValue;
           if (isArguments(objValue)) {
             newValue = toPlainObject(objValue);
@@ -4437,7 +4437,7 @@ var require_common = __commonJS({
   "node_modules/json-schema-merge-allof/src/common.js"(exports2, module2) {
     var flatten = require_flatten();
     var flattenDeep = require_flattenDeep();
-    var isPlainObject2 = require_isPlainObject();
+    var isPlainObject3 = require_isPlainObject();
     var uniq = require_uniq();
     var uniqWith = require_uniqWith();
     var without = require_without();
@@ -4453,14 +4453,14 @@ var require_common = __commonJS({
     var getValues = (schemas, key) => schemas.map((schema) => schema && schema[key]);
     var has = (obj, propName) => Object.prototype.hasOwnProperty.call(obj, propName);
     var keys = (obj) => {
-      if (isPlainObject2(obj) || Array.isArray(obj)) {
+      if (isPlainObject3(obj) || Array.isArray(obj)) {
         return Object.keys(obj);
       } else {
         return [];
       }
     };
     var notUndefined = (val) => val !== void 0;
-    var isSchema2 = (val) => isPlainObject2(val) || val === true || val === false;
+    var isSchema2 = (val) => isPlainObject3(val) || val === true || val === false;
     var isEmptySchema = (obj) => !keys(obj).length && obj !== false && obj !== true;
     var withoutArr = (arr, ...rest) => without.apply(null, [arr].concat(flatten(rest)));
     module2.exports = {
@@ -4654,7 +4654,7 @@ var require_src2 = __commonJS({
     var intersection2 = require_intersection();
     var intersectionWith = require_intersectionWith();
     var isEqual = require_isEqual();
-    var isPlainObject2 = require_isPlainObject();
+    var isPlainObject3 = require_isPlainObject();
     var pullAll = require_pullAll();
     var sortBy = require_sortBy();
     var uniq = require_uniq();
@@ -4662,7 +4662,7 @@ var require_src2 = __commonJS({
     var propertiesResolver = require_properties();
     var itemsResolver = require_items();
     var contains = (arr, val) => arr.indexOf(val) !== -1;
-    var isSchema2 = (val) => isPlainObject2(val) || val === true || val === false;
+    var isSchema2 = (val) => isPlainObject3(val) || val === true || val === false;
     var isFalse = (val) => val === false;
     var isTrue = (val) => val === true;
     var schemaResolver = (compacted, key, mergeSchemas) => mergeSchemas(compacted);
@@ -4684,7 +4684,7 @@ var require_src2 = __commonJS({
     }
     function getAllOf(schema) {
       let { allOf = [], ...copy } = schema;
-      copy = isPlainObject2(schema) ? copy : schema;
+      copy = isPlainObject3(schema) ? copy : schema;
       return [copy, ...allOf.map(getAllOf)];
     }
     function getValues(schemas, key) {
@@ -4700,7 +4700,7 @@ var require_src2 = __commonJS({
       }).filter(notUndefined);
     }
     function keys(obj) {
-      if (isPlainObject2(obj) || Array.isArray(obj)) {
+      if (isPlainObject3(obj) || Array.isArray(obj)) {
         return Object.keys(obj);
       } else {
         return [];
@@ -4745,7 +4745,7 @@ var require_src2 = __commonJS({
           [key]: (schemas2, extraKey = []) => mergeSchemas(schemas2, null, parents.concat(key, extraKey))
         }), {});
         const result = resolverConfig.resolver(unique, parents.concat(resolverName), mergers, options);
-        if (!isPlainObject2(result)) {
+        if (!isPlainObject3(result)) {
           throwIncompatible(unique, parents.concat(resolverName));
         }
         return result;
@@ -4872,7 +4872,7 @@ var require_src2 = __commonJS({
       function mergeSchemas(schemas, base, parents) {
         schemas = cloneDeep(schemas.filter(notUndefined));
         parents = parents || [];
-        const merged2 = isPlainObject2(base) ? base : {};
+        const merged2 = isPlainObject3(base) ? base : {};
         if (!schemas.length) {
           return;
         }
@@ -4882,7 +4882,7 @@ var require_src2 = __commonJS({
         if (schemas.every(isTrue)) {
           return true;
         }
-        schemas = schemas.filter(isPlainObject2);
+        schemas = schemas.filter(isPlainObject3);
         const allKeys = allUniqueKeys(schemas);
         if (options.deep && contains(allKeys, "allOf")) {
           return merger({
@@ -5428,7 +5428,7 @@ var require_lodash = __commonJS({
           } else {
             newValue = [];
           }
-        } else if (isPlainObject2(srcValue) || isArguments(srcValue)) {
+        } else if (isPlainObject3(srcValue) || isArguments(srcValue)) {
           newValue = objValue;
           if (isArguments(objValue)) {
             newValue = toPlainObject(objValue);
@@ -5683,7 +5683,7 @@ var require_lodash = __commonJS({
     function isObjectLike(value) {
       return value != null && typeof value == "object";
     }
-    function isPlainObject2(value) {
+    function isPlainObject3(value) {
       if (!isObjectLike(value) || baseGetTag(value) != objectTag) {
         return false;
       }
@@ -6436,10 +6436,10 @@ var require_object_inspect = __commonJS({
       }
       if (!isDate(obj) && !isRegExp(obj)) {
         var ys = arrObjKeys(obj, inspect);
-        var isPlainObject2 = gPO ? gPO(obj) === Object.prototype : obj instanceof Object || obj.constructor === Object;
+        var isPlainObject3 = gPO ? gPO(obj) === Object.prototype : obj instanceof Object || obj.constructor === Object;
         var protoTag = obj instanceof Object ? "" : "null prototype";
-        var stringTag = !isPlainObject2 && toStringTag && Object(obj) === obj && toStringTag in obj ? $slice.call(toStr(obj), 8, -1) : protoTag ? "Object" : "";
-        var constructorTag = isPlainObject2 || typeof obj.constructor !== "function" ? "" : obj.constructor.name ? obj.constructor.name + " " : "";
+        var stringTag = !isPlainObject3 && toStringTag && Object(obj) === obj && toStringTag in obj ? $slice.call(toStr(obj), 8, -1) : protoTag ? "Object" : "";
+        var constructorTag = isPlainObject3 || typeof obj.constructor !== "function" ? "" : obj.constructor.name ? obj.constructor.name + " " : "";
         var tag = constructorTag + (stringTag || protoTag ? "[" + $join.call($concat.call([], stringTag || [], protoTag || []), ": ") + "] " : "");
         if (ys.length === 0) {
           return tag + "{}";
@@ -45300,6 +45300,11 @@ var acculynx_get_jobs_default = defineAcculynxTool({
   description: "Retrieve a list of job records, filter by pipeline milestones, or perform targeted keyword search.",
   inputSchema: external_exports.object({
     searchTerm: external_exports.string().optional().describe("Filter jobs matching specific street names, customer names, or numbers"),
+    geoLocation: external_exports.object({
+      latitude: external_exports.number().describe("Latitude component of the map location"),
+      longitude: external_exports.number().describe("Longitude component of the map location"),
+      mapRadius: external_exports.number().optional().describe("Kilometers from (latitude, longitude) to consider (default 1)")
+    }).optional().describe("Search jobs within a radius of a map location (routes through job search; combinable with searchTerm)"),
     milestones: external_exports.string().optional().describe("Comma-separated milestone filter (e.g. 'lead,prospect,approved')"),
     sortBy: external_exports.enum(["CreatedDate", "MilestoneDate", "ModifiedDate"]).optional().describe("Sort the returned jobs by this date field (default CreatedDate)"),
     sortOrder: external_exports.enum(["Ascending", "Descending"]).optional().describe("Return jobs in Ascending or Descending order (default Ascending)"),
@@ -45311,11 +45316,14 @@ var acculynx_get_jobs_default = defineAcculynxTool({
     assignment: external_exports.enum(["assigned", "unassigned"]).optional().describe("Filter assigned or unassigned jobs"),
     response_format: external_exports.nativeEnum(ResponseFormat).optional().describe("Output serialization format")
   }),
-  async call(client2, { searchTerm, milestones, sortBy, sortOrder, pageSize, recordStartIndex, startDate, endDate, dateFilterType, assignment }) {
-    if (searchTerm) {
+  async call(client2, { searchTerm, geoLocation, milestones, sortBy, sortOrder, pageSize, recordStartIndex, startDate, endDate, dateFilterType, assignment }) {
+    if (searchTerm || geoLocation) {
       const searchMetadata = { includes: "contacts", pageSize: pageSize ?? 25 };
       if (recordStartIndex !== void 0) searchMetadata.recordStartIndex = recordStartIndex;
-      const res = await client2.searchJobs({ searchTerm }, searchMetadata);
+      const searchBody = {};
+      if (searchTerm) searchBody.searchTerm = searchTerm;
+      if (geoLocation) searchBody.geoLocation = geoLocation;
+      const res = await client2.searchJobs(searchBody, searchMetadata);
       return res.data;
     } else {
       const metadata = { includes: "contacts", pageSize: pageSize ?? 25 };
@@ -108290,7 +108298,7 @@ var acculynx_create_job_default = defineAcculynxTool({
     tradeTypes: external_exports.array(external_exports.object({
       id: external_exports.string().guid().describe("Trade Type UUID")
     })).optional(),
-    notes: external_exports.string().optional().describe("Initial job description remarks"),
+    notes: external_exports.string().max(1e3).optional().describe("Initial job description remarks"),
     salesOwnerIds: external_exports.array(external_exports.string().guid()).optional().describe("User UUIDs to assign as Sales Owners for the job"),
     companyRepresentativeIds: external_exports.array(external_exports.string().guid()).optional().describe("User UUIDs to assign as Company Representatives"),
     arOwnerIds: external_exports.array(external_exports.string().guid()).optional().describe("User UUIDs to assign as Accounts Receivable (AR) Owners")
@@ -108815,7 +108823,7 @@ var acculynx_put_insurance_company_for_job_default = defineAcculynxTool({
     jobId: external_exports.string().describe("The job's unique identifier"),
     body: external_exports.object({
       insuranceCompanyId: external_exports.string().describe("The insurance company's unique ID is to be set to the job.").optional(),
-      insuranceCompanyName: external_exports.string().describe("A job can have an insurance company that is not from the list managed in Account Settings. In this case, the 'insuranceCompanyId' should be null. The text will be assigned to the comments field for the 'Other' (active) insurance company.").optional()
+      insuranceCompanyName: external_exports.string().max(100).describe("A job can have an insurance company that is not from the list managed in Account Settings. In this case, the 'insuranceCompanyId' should be null. The text will be assigned to the comments field for the 'Other' (active) insurance company.").optional()
     })
   }),
   async call(client2, { body, jobId }) {
@@ -108961,12 +108969,12 @@ var acculynx_put_job_location_address_default = defineAcculynxTool({
   inputSchema: external_exports.object({
     jobId: external_exports.string().describe("The job's unique identifier"),
     body: external_exports.object({
-      street1: external_exports.string().optional(),
-      street2: external_exports.string().optional(),
-      city: external_exports.string().optional(),
-      state: external_exports.string().optional(),
-      country: external_exports.string().optional(),
-      zipCode: external_exports.string().optional()
+      street1: external_exports.string().max(250).optional(),
+      street2: external_exports.string().max(50).optional(),
+      city: external_exports.string().max(50).optional(),
+      state: external_exports.string().max(50).optional(),
+      country: external_exports.string().max(50).optional(),
+      zipCode: external_exports.string().max(10).optional()
     })
   }),
   async call(client2, { body, jobId }) {
@@ -109053,7 +109061,7 @@ var acculynx_update_job_lead_source_default = defineAcculynxTool({
   }),
   async call(client2, { jobId, leadSourceId }) {
     const res = await client2.updateJobLeadSource({ id: leadSourceId }, { jobId });
-    return res.data || { success: true, message: "Lead source updated successfully." }, void 0;
+    return res.data || { success: true, message: "Lead source updated successfully." };
   }
 });
 
@@ -109067,7 +109075,7 @@ var acculynx_create_job_message_default = defineAcculynxTool({
   }),
   async call(client2, { jobId, message }) {
     const res = await client2.postCreateJobMessage({ message }, { jobId });
-    return res.data || { success: true, message: "Message posted successfully." }, void 0;
+    return res.data || { success: true, message: "Message posted successfully." };
   }
 });
 
@@ -109129,7 +109137,7 @@ var acculynx_set_initial_appointment_default = defineAcculynxTool({
     if (endDate) body.endDate = endDate;
     if (notes) body.notes = notes;
     const res = await client2.putInitialAppointmentForJob(body, { jobId });
-    return res.data || { success: true, message: "Initial appointment saved successfully." }, void 0;
+    return res.data || { success: true, message: "Initial appointment saved successfully." };
   }
 });
 
@@ -109202,9 +109210,9 @@ var acculynx_post_job_measurements_upload_files_default = defineTool({
       ).optional(),
       latitude: external_exports.number().describe("Latitude of the map location for the new measurement order, value between -90 and 90."),
       longitude: external_exports.number().describe("Longitude of the map location for the new measurement order, value between -180 and 180."),
-      providerMeasurementOrderId: external_exports.string().describe("A text with the provider order identifier, special characters not allowed."),
+      providerMeasurementOrderId: external_exports.string().max(40).describe("A text with the provider order identifier, special characters not allowed."),
       providerId: external_exports.enum(["Unknown", "Hover", "RoofSnap", "External"]),
-      measurementOrderDescription: external_exports.string().describe("A text with a description of the new measurement order."),
+      measurementOrderDescription: external_exports.string().max(500).describe("A text with a description of the new measurement order."),
       model3DUrl: external_exports.string().describe("The URL of the 3D model file.").optional(),
       orderedDate: external_exports.string().describe("The creation DateTime for the new measurement order. An ISO 8601 string of datetime including the time component and ending with 'Z' (so in UTC). https://en.wikipedia.org/wiki/ISO_8601#Coordinated_Universal_Time_(UTC)"),
       completedDate: external_exports.string().describe("The completed DateTime for the new measurement order. An ISO 8601 string of datetime including the time component and ending with 'Z' (so in UTC). https://en.wikipedia.org/wiki/ISO_8601#Coordinated_Universal_Time_(UTC)").optional()
@@ -109238,22 +109246,31 @@ var acculynx_get_contacts_default = defineAcculynxTool({
   description: "List contacts or query via dynamic keyword matching, custom filtering, and standard sort ordering.",
   inputSchema: external_exports.object({
     searchTerm: external_exports.string().optional().describe("Filter contacts by first name, last name, or company name"),
+    contactTypes: external_exports.array(external_exports.string()).optional().describe('Search mode only: restrict to these contact type names, e.g. ["Customer"]'),
+    startDate: external_exports.string().optional().describe("Search mode only: earliest creation date to match, ISO 8601 (defaults to 1970-01-01)"),
+    endDate: external_exports.string().optional().describe("Search mode only: latest creation date to match, ISO 8601 (defaults to 2050-01-01)"),
+    sort: external_exports.object({
+      sortColumn: external_exports.enum(["CreatedDate", "CompanyName", "ContactType", "firstName", "lastName", "LifeTimeValue"]).describe("The column to sort by"),
+      sortDirection: external_exports.enum(["Ascending", "Descending"]).describe("Sort direction of the search")
+    }).optional().describe("Search mode only: sort order (defaults to lastName Ascending)"),
     pageSize: external_exports.number().optional().describe("How many items to be returned at a time"),
     pageStartIndex: external_exports.number().optional().describe("The index of the first element to return"),
     response_format: external_exports.nativeEnum(ResponseFormat).optional().describe("Output format")
   }),
-  async call(client2, { searchTerm, pageSize, pageStartIndex }) {
+  async call(client2, { searchTerm, contactTypes, startDate, endDate, sort, pageSize, pageStartIndex }) {
     const pagination = { pageSize: pageSize ?? 25, pageStartIndex: pageStartIndex ?? 0 };
     if (searchTerm) {
-      const res = await client2.postContactSearch({
+      const body = {
         searchTerm,
-        startDate: "1970-01-01",
-        endDate: "2050-01-01",
-        sort: {
+        startDate: startDate ?? "1970-01-01",
+        endDate: endDate ?? "2050-01-01",
+        sort: sort ?? {
           sortColumn: "lastName",
           sortDirection: "Ascending"
         }
-      }, pagination);
+      };
+      if (contactTypes && contactTypes.length > 0) body.contactTypes = contactTypes;
+      const res = await client2.postContactSearch(body, pagination);
       return res.data;
     } else {
       const res = await client2.getContacts(pagination);
@@ -109276,6 +109293,14 @@ var acculynx_get_contact_default = defineAcculynxTool({
 });
 
 // src/commands/acculynx_create_contact.ts
+var contactAddress = external_exports.object({
+  street1: external_exports.string().optional(),
+  street2: external_exports.string().optional(),
+  city: external_exports.string().optional(),
+  zipCode: external_exports.string().optional(),
+  state: external_exports.object({ id: external_exports.number().describe("Numerical state id (see acculynx settings country-states)") }).optional(),
+  country: external_exports.object({ id: external_exports.number().describe("Numerical country id (see acculynx settings countries)") }).optional()
+});
 var acculynx_create_contact_default = defineAcculynxTool({
   approval: always(),
   description: "Provision a new contact profile within AccuLynx. Returns created entity details including its assigned UUID.",
@@ -109294,7 +109319,12 @@ var acculynx_create_contact_default = defineAcculynxTool({
       primary: external_exports.boolean().optional(),
       type: external_exports.enum(["Personal", "Work", "Other"]).optional()
     })).optional(),
-    note: external_exports.string().optional().describe("Additional descriptive documentation note")
+    note: external_exports.string().optional().describe("Additional descriptive documentation note"),
+    companyJobTitle: external_exports.string().optional().describe("Job title of the contact"),
+    crossReference: external_exports.string().optional().describe("Cross-reference identifier for the contact (e.g. an external system id)"),
+    mailingAddress: contactAddress.optional().describe("Mailing address of the contact"),
+    billingAddress: contactAddress.optional().describe("Billing address of the contact"),
+    billingAddressSameAsMailingAddress: external_exports.boolean().optional().describe("Indicates if the billing address is the same as the mailing address")
   }),
   async call(client2, payload) {
     const res = await client2.postContacts(payload);
@@ -109403,7 +109433,7 @@ var acculynx_add_contact_log_default = defineAcculynxTool({
     const body = { logDate, type };
     if (description) body.description = description;
     const res = await client2.postContactLog(body, { contactId });
-    return res.data || { success: true, message: "Contact log entry created successfully." }, void 0;
+    return res.data || { success: true, message: "Contact log entry created successfully." };
   }
 });
 
@@ -109709,8 +109739,8 @@ var acculynx_post_worksheet_section_item_default = defineAcculynxTool({
     body: external_exports.object({
       sectionId: external_exports.string().describe("The unique ID of the worksheet section where the item will be created. If the worksheet does not exist, this field should be left empty.").optional(),
       parentItemId: external_exports.string().describe("The unique ID for the parent item of this item.").optional(),
-      itemName: external_exports.string().describe("The name of the item.").optional(),
-      description: external_exports.string().describe("The description of the item.").optional(),
+      itemName: external_exports.string().max(28e3).describe("The name of the item.").optional(),
+      description: external_exports.string().max(63e3).describe("The description of the item.").optional(),
       quantity: external_exports.number().describe("The quantity for this item.").optional(),
       unitOfMeasure: external_exports.string().describe("The unique ID for the unit of measure.").optional(),
       costPerUnit: external_exports.number().describe("The cost/unit for this item.").optional(),
@@ -109847,17 +109877,19 @@ var acculynx_create_payment_received_default = defineAcculynxTool({
     jobId: external_exports.string().guid().describe("Unique UUID string identifying the target job"),
     amount: external_exports.number().positive().describe("Payment amount in dollars"),
     paymentDate: external_exports.string().describe("Date the payment was received, in YYYY-MM-DD format"),
-    from: external_exports.string().optional().describe("Who the payment was received from"),
-    checkNumber: external_exports.string().optional().describe("Reference or check number for the payment"),
-    notes: external_exports.string().optional().describe("Optional notes about the payment")
+    paymentMethod: external_exports.string().max(50).optional().describe("Payment method used to perform the payment, e.g. Check or Credit Card"),
+    from: external_exports.string().max(250).optional().describe("Who the payment was received from"),
+    checkNumber: external_exports.string().max(50).optional().describe("Reference or check number for the payment"),
+    notes: external_exports.string().max(250).optional().describe("Optional notes about the payment")
   }),
-  async call(client2, { jobId, amount, paymentDate, from, checkNumber, notes }) {
+  async call(client2, { jobId, amount, paymentDate, paymentMethod, from, checkNumber, notes }) {
     const body = { amount, paymentDate };
+    if (paymentMethod) body.paymentMethod = paymentMethod;
     if (from) body.from = from;
     if (checkNumber) body.checkNumber = checkNumber;
     if (notes) body.notes = notes;
     const res = await client2.postCreatePaymentReceived(body, { jobId });
-    return res.data || { success: true, message: "Payment recorded successfully." }, void 0;
+    return res.data || { success: true, message: "Payment recorded successfully." };
   }
 });
 
@@ -109869,12 +109901,12 @@ var acculynx_post_create_payment_paid_default = defineAcculynxTool({
     jobId: external_exports.string().describe("The job's unique identifier"),
     body: external_exports.object({
       to: external_exports.string().describe("Payment paid to").optional(),
-      paymentMethod: external_exports.string().describe("Payment method used to perform the payment").optional(),
+      paymentMethod: external_exports.string().max(50).describe("Payment method used to perform the payment").optional(),
       amount: external_exports.number().describe("Amount of payment paid").optional(),
       paymentDate: external_exports.string().describe("An ISO 8601 string of the payment's datetime including the time component and ending with 'Z' (so in UTC). Note: Only the date is taken into account. The time component is discarded. https://en.wikipedia.org/wiki/ISO_8601#Coordinated_Universal_Time_(UTC)").optional(),
-      notes: external_exports.string().describe("Optional note for the payment.").optional(),
+      notes: external_exports.string().max(250).describe("Optional note for the payment.").optional(),
       accountTypeId: external_exports.string().describe("Id of account type").optional(),
-      refNumber: external_exports.string().optional(),
+      refNumber: external_exports.string().max(50).optional(),
       isPaid: external_exports.boolean().describe("Is Paid?").optional()
     })
   }),
@@ -109893,10 +109925,15 @@ var acculynx_post_create_payment_additional_expense_default = defineAcculynxTool
     body: external_exports.object({
       to: external_exports.string().describe("Payment Additional Expense to").optional(),
       amount: external_exports.number().describe("Amount of payment Additional Expense").optional(),
-      notes: external_exports.string().describe("Optional note for the payment.").optional(),
+      // The API rejects the request outright without a paymentDate ("PaymentDate
+      // cannot be null or empty"), so it is required here despite the spec
+      // marking it nullable.
+      paymentDate: external_exports.iso.datetime().describe("An ISO 8601 string of the payment's datetime including the time component and ending with 'Z' (so in UTC), e.g. 2026-08-27T00:00:00Z. Note: Only the date is taken into account. The time component is discarded."),
+      paymentMethod: external_exports.string().max(50).describe("Payment method used to perform the payment, e.g. Credit Card").optional(),
+      notes: external_exports.string().max(250).describe("Optional note for the payment.").optional(),
       accountTypeId: external_exports.string().describe("Id of account type").optional(),
       isPaid: external_exports.boolean().describe("Value that indicates if the payment expense is fully paid.").optional(),
-      refNumber: external_exports.string().describe("Reference number for the payment expense.").optional()
+      refNumber: external_exports.string().max(50).describe("Reference number for the payment expense.").optional()
     })
   }),
   async call(client2, { body, jobId }) {
@@ -109985,9 +110022,11 @@ var acculynx_add_job_document_default = defineTool({
     fileName: external_exports.string().optional().describe(
       "Filename to store in AccuLynx (e.g. 'McPherson Supplement 1.pdf'). Overrides any name derived from the input; recommended for base64 and URL inputs, which otherwise get a generated name."
     ),
-    description: external_exports.string().optional().describe("Brief file context description")
+    description: external_exports.string().optional().describe("Brief file context description"),
+    externalId: external_exports.string().optional().describe("Link the file to a job external reference identifier"),
+    externalSource: external_exports.string().optional().describe("Link the file to a job external reference source")
   }),
-  async execute({ jobId, documentFolderId, file: file2, fileName, description }, ctx) {
+  async execute({ jobId, documentFolderId, file: file2, fileName, description, externalId, externalSource }, ctx) {
     let resolvedFile = file2;
     let cleanup = async () => {
     };
@@ -110002,7 +110041,9 @@ var acculynx_add_job_document_default = defineTool({
         {
           file: resolvedFile,
           documentFolderId,
-          description
+          description,
+          externalId,
+          externalSource
         },
         { jobId }
       );
@@ -111683,25 +111724,57 @@ function sampleFor(type, enumValues, key) {
   if (/id$/i.test(key)) return "3fa85f64-5717-4562-b3fc-2c963f66afa6";
   return '"text"';
 }
-function sampleFromSchema2(prop) {
+function sampleFromSchema2(prop, key = "") {
   const p = prop?.anyOf?.[0] ?? prop ?? {};
   if (p.type === "array") return [sampleFromSchema2(p.items)];
   if (p.type === "object") {
-    const out = {};
-    for (const key of p.required ?? Object.keys(p.properties ?? {}).slice(0, 3)) {
-      out[key] = sampleFromSchema2(p.properties?.[key]);
+    const required2 = p.required ?? [];
+    const keys = [...required2];
+    for (const k of Object.keys(p.properties ?? {})) {
+      if (keys.length >= Math.max(3, required2.length)) break;
+      if (!keys.includes(k)) keys.push(k);
     }
+    const out = {};
+    for (const k of keys) out[k] = sampleFromSchema2(p.properties?.[k], k);
     return out;
   }
   if (p.enum?.length) return p.enum[0];
   if (p.type === "number" || p.type === "integer") return 1;
   if (p.type === "boolean") return true;
+  if (p.format === "date-time" || /date$/i.test(key)) return "2026-07-28T00:00:00Z";
+  if (/id$/i.test(key)) return "3fa85f64-5717-4562-b3fc-2c963f66afa6";
   return "text";
+}
+function isPlainObject2(v) {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+function collectDroppedKeys(input, parsed, prefix = "") {
+  if (Array.isArray(input) && Array.isArray(parsed)) {
+    return input.flatMap(
+      (item, i2) => i2 < parsed.length ? collectDroppedKeys(item, parsed[i2], `${prefix}[${i2}]`) : []
+    );
+  }
+  if (isPlainObject2(input) && isPlainObject2(parsed)) {
+    return Object.keys(input).flatMap((key) => {
+      const path4 = prefix ? `${prefix}.${key}` : key;
+      if (!(key in parsed)) return input[key] === void 0 ? [] : [path4];
+      return collectDroppedKeys(input[key], parsed[key], path4);
+    });
+  }
+  return [];
 }
 function validateInput(entry, shape, input) {
   const parsed = entry.config.inputSchema.safeParse(input);
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i2) => ({ path: i2.path.join("."), message: i2.message }));
+    throw new ValidationError(`${entry.group} ${entry.verb}`, issues, shape.jsonSchema, makeExample(entry, shape));
+  }
+  const dropped = collectDroppedKeys(input, parsed.data);
+  if (dropped.length > 0) {
+    const issues = dropped.map((path4) => ({
+      path: path4,
+      message: "Unknown key: not accepted by this command's schema (it would have been silently ignored)."
+    }));
     throw new ValidationError(`${entry.group} ${entry.verb}`, issues, shape.jsonSchema, makeExample(entry, shape));
   }
   return parsed.data;

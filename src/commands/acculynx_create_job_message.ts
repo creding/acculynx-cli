@@ -11,7 +11,6 @@ export default defineAcculynxTool({
   }),
   async call(client, { jobId, message }) {
     const res = await client.postCreateJobMessage({ message }, { jobId });
-    return res.data || { success: true, message: "Message posted successfully." },
-      undefined;
+    return res.data || { success: true, message: "Message posted successfully." };
   },
 });

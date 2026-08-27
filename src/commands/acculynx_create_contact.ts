@@ -2,6 +2,15 @@ import { defineAcculynxTool } from "../lib/define-acculynx-tool.ts";
 import { always } from "../lib/approval.ts";
 import { z } from "zod";
 
+const contactAddress = z.object({
+  street1: z.string().optional(),
+  street2: z.string().optional(),
+  city: z.string().optional(),
+  zipCode: z.string().optional(),
+  state: z.object({ id: z.number().describe("Numerical state id (see acculynx settings country-states)") }).optional(),
+  country: z.object({ id: z.number().describe("Numerical country id (see acculynx settings countries)") }).optional(),
+});
+
 export default defineAcculynxTool({
   approval: always(),
   description: "Provision a new contact profile within AccuLynx. Returns created entity details including its assigned UUID.",
@@ -21,6 +30,11 @@ export default defineAcculynxTool({
       type: z.enum(["Personal", "Work", "Other"]).optional(),
     })).optional(),
     note: z.string().optional().describe("Additional descriptive documentation note"),
+    companyJobTitle: z.string().optional().describe("Job title of the contact"),
+    crossReference: z.string().optional().describe("Cross-reference identifier for the contact (e.g. an external system id)"),
+    mailingAddress: contactAddress.optional().describe("Mailing address of the contact"),
+    billingAddress: contactAddress.optional().describe("Billing address of the contact"),
+    billingAddressSameAsMailingAddress: z.boolean().optional().describe("Indicates if the billing address is the same as the mailing address"),
   }),
   async call(client, payload) {
     const res = await client.postContacts(payload);

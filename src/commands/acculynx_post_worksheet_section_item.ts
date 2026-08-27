@@ -10,8 +10,8 @@ export default defineAcculynxTool({
     body: z.object({
     sectionId: z.string().describe("The unique ID of the worksheet section where the item will be created. If the worksheet does not exist, this field should be left empty.").optional(),
     parentItemId: z.string().describe("The unique ID for the parent item of this item.").optional(),
-    itemName: z.string().describe("The name of the item.").optional(),
-    description: z.string().describe("The description of the item.").optional(),
+    itemName: z.string().max(28000).describe("The name of the item.").optional(),
+    description: z.string().max(63000).describe("The description of the item.").optional(),
     quantity: z.number().describe("The quantity for this item.").optional(),
     unitOfMeasure: z.string().describe("The unique ID for the unit of measure.").optional(),
     costPerUnit: z.number().describe("The cost/unit for this item.").optional(),
